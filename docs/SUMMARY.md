@@ -1,6 +1,6 @@
 # Table of contents
 
-* [Mindvas](README.md)
+* [Cammvas](README.md)
 
 ## Getting Started
 

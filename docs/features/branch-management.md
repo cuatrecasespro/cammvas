@@ -4,11 +4,21 @@ description: Flip branches, balance layouts, and manage branch colors.
 
 # Branch management
 
+## Collapse branches
+
+Nodes with children show a chevron on their right edge. Click it to hide or restore the complete descendant subtree. Collapsed state is stored in the `.canvas` file and restored when the map is reopened; node positions and content are never deleted or changed.
+
 ## Branch coloring
 
 When **Auto-color branches** is enabled (on by default), each top-level branch from a root node gets a distinct color. Colors are reapplied automatically when you add or delete nodes.
 
 To manually trigger coloring, run **Apply branch colors** from the command palette.
+
+## Drag to reparent
+
+Enable **Drag to reparent** in Cammvas settings or with the branch button directly below **Mindmap mode** in the Canvas sidebar. Then drag a node onto another node to make it a child of that target. The target is highlighted before the drop, and the dragged node keeps its complete descendant branch. Dropping onto the same node or one of its descendants is blocked to prevent cycles.
+
+When **Auto-layout** is enabled, the map is rearranged after the drop. Dropping outside another node keeps the normal Canvas drag behavior.
 
 ## Flip branch
 

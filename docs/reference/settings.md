@@ -1,16 +1,21 @@
 ---
-description: All Mindvas plugin settings and their defaults.
+description: All Cammvas plugin settings and their defaults.
 ---
 
 # Settings
 
-Open **Settings > Mindvas** to configure the plugin.
+Open **Settings > Cammvas** to configure the plugin.
 
 | Setting | Description | Default |
 |---------|-------------|:-------:|
 | Default mindmap mode | Whether canvases open in mindmap mode by default | On |
 | Auto-layout | Automatically arrange nodes after adding/deleting | On |
 | Auto-color branches | Assign distinct colors to top-level branches | On |
+| Arrow key navigation | Navigate selected nodes with plain arrow keys instead of moving cards | On |
+| Drag to reparent | Drop a node onto another node to make it a child while preserving its branch | Off |
+| Mind mapping Enter and Tab | Enter creates a sibling while editing, Tab creates a child, and Shift+Enter inserts a new line | Off |
+| Branch color palette | Comma-separated Canvas colors (1-6) or hex colors | 1, 2, 3, 4, 5, 6 |
+| Color leaf nodes | Color terminal nodes; their incoming edges remain colored either way | On |
 | Horizontal gap | Space between parent and child nodes (px) | 80 |
 | Vertical gap | Space between sibling nodes (px) | 20 |
 | Default node width | Width of newly created nodes (px) | 300 |

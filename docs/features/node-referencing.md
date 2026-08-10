@@ -35,7 +35,7 @@ Click the link (node must be focused, not in edit mode). Obsidian opens the targ
 The link format is:
 
 ```
-[Node Title](obsidian://mindvas-navigate?canvas=path/to/canvas.canvas&id=abc123)
+[Node Title](obsidian://cammvas-navigate?canvas=path/to/canvas.canvas&id=abc123)
 ```
 
 * **canvas** — the vault-relative path to the canvas file
@@ -49,7 +49,7 @@ Links include the canvas file path, so they work from:
 * Nodes on a different canvas
 * Regular markdown notes
 
-If the target canvas isn't open, Mindvas opens it first, then navigates to the node.
+If the target canvas isn't open, Cammvas opens it first, then navigates to the node.
 
 ## Group links
 

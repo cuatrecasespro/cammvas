@@ -15,9 +15,9 @@ layout:
     visible: true
 ---
 
-# Mindvas
+# Cammvas
 
-Mindvas adds mind mapping capabilities to Obsidian Canvas. Build tree-structured mind maps with automatic layout, keyboard navigation, branch colors, and a sidebar outline panel — all without leaving Canvas.
+Cammvas reproduces dedicated mind-mapping workflows inside Obsidian Canvas. Build branches with familiar hotkeys, drag nodes to reparent complete subtrees, collapse branches, and navigate a synchronized outline without leaving Canvas.
 
 ## Key features
 

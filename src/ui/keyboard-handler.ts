@@ -4,13 +4,18 @@ import { CanvasAPI } from "../canvas/canvas-api";
 import { NodeOperations } from "../mindmap/node-operations";
 import { LayoutEngine } from "../mindmap/layout-engine";
 import { BranchColors } from "../mindmap/branch-colors";
+import { COLLAPSED_HIDDEN_CLASS } from "../canvas/branch-collapse";
 import {
 	buildForest,
 	findTreeForNode,
 	getNextSibling,
 	getPrevSibling,
+	getGroupIds,
 	TreeNode,
 } from "../mindmap/tree-model";
+import { findNearestNodeInDirection, SpatialDirection } from "./spatial-navigation";
+import { shouldCreateChildOnTab, shouldCreateSiblingOnEnter } from "./editing-enter";
+import { isNodeEditorFocused } from "./editing-state";
 
 /**
  * Registers all mind map keyboard shortcuts on the canvas.
@@ -20,14 +25,20 @@ export class KeyboardHandler {
 	onBeforeLeaveNode: (() => void) | null = null;
 	/** Padding (px) added around target node when zooming after navigation. */
 	zoomPadding: number = 0;
+	private arrowKeySelectionOnly = false;
+	private arrowNavigationCanvas: Canvas | null = null;
+	private arrowKeyRestorers: Array<() => void> = [];
 
 	constructor(
 		private plugin: Plugin,
 		private canvasApi: CanvasAPI,
 		public nodeOps: NodeOperations,
 		public layoutEngine: LayoutEngine,
-		private branchColors: BranchColors,
+		public branchColors: BranchColors,
 		private autoColorEnabled: () => boolean,
+		private autoLayoutEnabled: () => boolean,
+		private arrowKeyNavigationEnabled: () => boolean,
+		private enterCreatesSiblingEnabled: () => boolean,
 		private isMindmapEnabled: (canvas: Canvas) => boolean = () => true,
 		private onNodesChanged: (canvas: Canvas) => void = () => {}
 	) {}
@@ -69,10 +80,11 @@ export class KeyboardHandler {
 			},
 		});
 
-		// Ctrl+> → Create child node
+		// Shift+Tab → Create child node
 		this.plugin.addCommand({
 			id: "mindmap-add-child",
 			name: "Add child node",
+			hotkeys: [{ modifiers: ["Shift"], key: "Tab" }],
 			checkCallback: (checking: boolean) => {
 				const canvas = this.canvasApi.getActiveCanvas();
 				if (!canvas) return false;
@@ -88,7 +100,9 @@ export class KeyboardHandler {
 				const newNode = this.nodeOps.addChild(canvas, node);
 				if (newNode) {
 					if (selectedText) newNode.setText(selectedText);
-					this.layoutEngine.layoutChildren(canvas, node.id);
+					if (this.autoLayoutEnabled()) {
+						this.layoutEngine.layoutChildren(canvas, node.id, new Set([newNode.id]));
+					}
 					if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {
 						this.branchColors.applyColors(canvas);
 					}
@@ -98,10 +112,11 @@ export class KeyboardHandler {
 			},
 		});
 
-		// Shift+Enter → Create sibling node
+		// Shift+º → Create sibling node
 		this.plugin.addCommand({
 			id: "mindmap-add-sibling",
 			name: "Add sibling node",
+			hotkeys: [{ modifiers: ["Shift"], key: "º" }],
 			checkCallback: (checking: boolean) => {
 				const canvas = this.canvasApi.getActiveCanvas();
 				if (!canvas) return false;
@@ -119,7 +134,9 @@ export class KeyboardHandler {
 					if (selectedText) newNode.setText(selectedText);
 					const parent = this.canvasApi.getParentNode(canvas, node);
 					if (parent) {
-						this.layoutEngine.layoutChildren(canvas, parent.id);
+						if (this.autoLayoutEnabled()) {
+							this.layoutEngine.layoutChildren(canvas, parent.id, new Set([newNode.id]));
+						}
 					}
 					if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {
 						this.branchColors.applyColors(canvas);
@@ -147,7 +164,7 @@ export class KeyboardHandler {
 					node
 				);
 				if (parent) {
-					this.layoutEngine.layoutChildren(canvas, parent.id);
+					if (this.autoLayoutEnabled()) this.layoutEngine.layoutChildren(canvas, parent.id);
 					if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {
 						this.branchColors.applyColors(canvas);
 					}
@@ -269,7 +286,7 @@ export class KeyboardHandler {
 						if (parentCx >= nodeCx) return tree.parent.canvasNode;
 					}
 					return null;
-				});
+				}, "right");
 			},
 		});
 
@@ -298,7 +315,7 @@ export class KeyboardHandler {
 						if (parentCx < nodeCx) return tree.parent.canvasNode;
 					}
 					return null;
-				});
+				}, "left");
 			},
 		});
 
@@ -316,7 +333,7 @@ export class KeyboardHandler {
 					const next = getNextSibling(tree);
 					if (next) return next.canvasNode;
 					return tree.parent.children[0].canvasNode;
-				});
+				}, "down");
 			},
 		});
 
@@ -335,12 +352,133 @@ export class KeyboardHandler {
 					if (prev) return prev.canvasNode;
 					const siblings = tree.parent.children;
 					return siblings[siblings.length - 1].canvasNode;
-				});
+				}, "up");
 			},
 		});
 
 		// Register physical-key fallback for non-Latin keyboard layouts
 		this.registerPhysicalKeyShortcuts();
+		this.plugin.register(() => this.unregisterArrowKeyNavigation());
+	}
+
+	handleEditingEnter(canvas: Canvas, event: KeyboardEvent): boolean {
+		const node = this.canvasApi.getSelectedNode(canvas);
+		if (!node || !this.isMindmapEnabled(canvas)) return false;
+		if (!shouldCreateSiblingOnEnter(event, this.enterCreatesSiblingEnabled(), node.isEditing)) {
+			return false;
+		}
+
+		const { commands } = this.plugin.app as unknown as { commands: ObsidianCommands };
+		if (!commands?.executeCommandById) return false;
+		event.preventDefault();
+		event.stopImmediatePropagation();
+		commands.executeCommandById("cammvas:mindmap-add-sibling");
+		return true;
+	}
+
+	handleChildTab(canvas: Canvas, event: KeyboardEvent): boolean {
+		const node = this.canvasApi.getSelectedNode(canvas);
+		if (!node || !this.isMindmapEnabled(canvas)) return false;
+		if (!shouldCreateChildOnTab(event, this.enterCreatesSiblingEnabled(), true)) return false;
+
+		const { commands } = this.plugin.app as unknown as { commands: ObsidianCommands };
+		if (!commands?.executeCommandById) return false;
+		event.preventDefault();
+		event.stopImmediatePropagation();
+		commands.executeCommandById("cammvas:mindmap-add-child");
+		return true;
+	}
+
+	registerArrowKeyNavigation(canvas: Canvas): void {
+		this.unregisterArrowKeyNavigation();
+		const commandIds: Record<string, string> = {
+			ArrowRight: "cammvas:mindmap-nav-right",
+			ArrowLeft: "cammvas:mindmap-nav-left",
+			ArrowDown: "cammvas:mindmap-nav-next-sibling",
+			ArrowUp: "cammvas:mindmap-nav-prev-sibling",
+		};
+
+		const entries = canvas.view.scope?.keys;
+		if (!entries) return;
+
+		for (const [key, commandId] of Object.entries(commandIds)) {
+			const entry = entries.find(
+				(candidate) => candidate.key === key && candidate.modifiers === ""
+			);
+			if (!entry) continue;
+			const original = entry.func;
+			const replacement = (event: KeyboardEvent, context?: unknown): unknown => {
+				const node = this.canvasApi.getSelectedNode(canvas);
+				if (!this.arrowKeyNavigationEnabled()
+					|| !this.isMindmapEnabled(canvas)
+					|| !node
+					|| isNodeEditorFocused(node)) {
+					return original(event, context);
+				}
+
+				const { commands } = this.plugin.app as unknown as { commands: ObsidianCommands };
+				if (!commands?.executeCommandById) return original(event, context);
+				event.preventDefault();
+				this.arrowKeySelectionOnly = true;
+				this.arrowNavigationCanvas = canvas;
+				try {
+					commands.executeCommandById(commandId);
+				} finally {
+					this.arrowKeySelectionOnly = false;
+					this.arrowNavigationCanvas = null;
+				}
+				return false;
+			};
+			entry.func = replacement;
+			this.arrowKeyRestorers.push(() => {
+				if (entry.func === replacement) entry.func = original;
+			});
+		}
+
+		this.registerCanvasKeyOverride(
+			canvas,
+			"Enter",
+			(event) => this.handleEditingEnter(canvas, event)
+		);
+		this.registerCanvasKeyOverride(
+			canvas,
+			"Tab",
+			(event) => this.handleChildTab(canvas, event)
+		);
+	}
+
+	private registerCanvasKeyOverride(
+		canvas: Canvas,
+		key: string,
+		handle: (event: KeyboardEvent) => boolean
+	): void {
+		const scope = canvas.view.scope;
+		const existing = scope.keys.find(
+			(candidate) => candidate.key === key && candidate.modifiers === ""
+		);
+		const original = existing?.func;
+		const replacement = (event: KeyboardEvent, context?: unknown): unknown => {
+			if (handle(event)) return false;
+			if (original) return original(event, context);
+			return scope.parent?.handleKey(event, context);
+		};
+
+		if (existing) {
+			existing.func = replacement;
+			this.arrowKeyRestorers.push(() => {
+				if (existing.func === replacement) existing.func = original!;
+			});
+			return;
+		}
+
+		const entry = scope.register([], key, replacement);
+		this.arrowKeyRestorers.push(() => scope.unregister(entry));
+	}
+
+	unregisterArrowKeyNavigation(): void {
+		for (const restore of this.arrowKeyRestorers) restore();
+		this.arrowKeyRestorers = [];
+		this.arrowNavigationCanvas = null;
 	}
 
 	/**
@@ -377,12 +515,12 @@ export class KeyboardHandler {
 	 */
 	private registerPhysicalKeyShortcuts(): void {
 		const shortcuts = [
-			{ code: "Period", key: ".", ctrl: true, shift: false, alt: false, cmdId: "mindvas:mindmap-add-child" },
-			{ code: "KeyS", key: "s", ctrl: true, shift: false, alt: false, cmdId: "mindvas:mindmap-save-node" },
-			{ code: "KeyS", key: "s", ctrl: true, shift: true, alt: false, cmdId: "mindvas:mindmap-flip-branch" },
-			{ code: "KeyD", key: "d", ctrl: true, shift: true, alt: false, cmdId: "mindvas:mindmap-toggle-balance" },
-			{ code: "KeyL", key: "l", ctrl: true, shift: true, alt: false, cmdId: "mindvas:mindmap-resize-subtree" },
-			{ code: "KeyR", key: "r", ctrl: true, shift: true, alt: true, cmdId: "mindvas:mindmap-resize-all" },
+			{ code: "Period", key: ".", ctrl: true, shift: false, alt: false, cmdId: "cammvas:mindmap-add-child" },
+			{ code: "KeyS", key: "s", ctrl: true, shift: false, alt: false, cmdId: "cammvas:mindmap-save-node" },
+			{ code: "KeyS", key: "s", ctrl: true, shift: true, alt: false, cmdId: "cammvas:mindmap-flip-branch" },
+			{ code: "KeyD", key: "d", ctrl: true, shift: true, alt: false, cmdId: "cammvas:mindmap-toggle-balance" },
+			{ code: "KeyL", key: "l", ctrl: true, shift: true, alt: false, cmdId: "cammvas:mindmap-resize-subtree" },
+			{ code: "KeyR", key: "r", ctrl: true, shift: true, alt: true, cmdId: "cammvas:mindmap-resize-all" },
 		];
 
 		this.plugin.registerDomEvent(document, "keydown", (e: KeyboardEvent) => {
@@ -508,9 +646,10 @@ export class KeyboardHandler {
 	 */
 	private navigateCommand(
 		checking: boolean,
-		getTarget: (tree: TreeNode) => CanvasNode | null
+		getTarget: (tree: TreeNode) => CanvasNode | null,
+		spatialDirection: SpatialDirection
 	): boolean {
-		const canvas = this.canvasApi.getActiveCanvas();
+		const canvas = this.arrowNavigationCanvas ?? this.canvasApi.getActiveCanvas();
 		if (!canvas) return false;
 
 		const node = this.canvasApi.getSelectedNode(canvas);
@@ -525,16 +664,30 @@ export class KeyboardHandler {
 		const treeNode = findTreeForNode(forest, node.id);
 		if (!treeNode) return false;
 
-		const target = getTarget(treeNode);
-		if (!target) return false;
+		const groupIds = getGroupIds(canvas);
+		const spatialCandidates = Array.from(canvas.nodes.values()).filter(
+			(candidate) => !groupIds.has(candidate.id)
+				&& !candidate.nodeEl.hasClass(COLLAPSED_HIDDEN_CLASS)
+		);
+		const target = getTarget(treeNode)
+			?? findNearestNodeInDirection(node, spatialCandidates, spatialDirection)
+			?? node;
+		if (target.id === node.id) return true;
+		if (target.nodeEl.hasClass(COLLAPSED_HIDDEN_CLASS)) return false;
 
 		this.onBeforeLeaveNode?.();
-		// Relayout from the root of the tree containing the node being left
-		let root = treeNode;
-		while (root.parent) root = root.parent;
-		this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
-		this.onNodesChanged(canvas);
-		this.canvasApi.selectAndEdit(canvas, target, this.zoomPadding);
+		if (!this.arrowKeySelectionOnly) {
+			// Explicit navigation commands preserve their existing relayout behavior.
+			let root = treeNode;
+			while (root.parent) root = root.parent;
+			if (this.autoLayoutEnabled()) this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
+			this.onNodesChanged(canvas);
+		}
+		if (this.arrowKeySelectionOnly) {
+			this.canvasApi.selectAndZoom(canvas, target, this.zoomPadding);
+		} else {
+			this.canvasApi.selectAndEdit(canvas, target, this.zoomPadding);
+		}
 		return true;
 	}
 }

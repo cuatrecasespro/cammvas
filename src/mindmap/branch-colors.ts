@@ -1,12 +1,7 @@
 import type { Canvas, CanvasNode, CanvasEdge } from "../types/canvas-internal";
 import { CanvasAPI } from "../canvas/canvas-api";
 import { buildForest, TreeNode } from "./tree-model";
-
-/**
- * Default color palette for top-level branches.
- * Uses Obsidian's canvas color system (string numbers "1"-"6" map to CSS vars).
- */
-const DEFAULT_PALETTE: string[] = ["1", "2", "3", "4", "5", "6"];
+import { DEFAULT_BRANCH_PALETTE, getBranchNodeColor, normalizePalette } from "./color-palette";
 
 /**
  * Assigns distinct colors to top-level branches and cascades to descendants.
@@ -16,9 +11,10 @@ export class BranchColors {
 
 	constructor(
 		private canvasApi: CanvasAPI,
-		palette?: string[]
+		palette: string[] = DEFAULT_BRANCH_PALETTE,
+		private colorLeafNodes: boolean = true
 	) {
-		this.palette = palette ?? DEFAULT_PALETTE;
+		this.palette = normalizePalette(palette);
 	}
 
 	/**
@@ -44,8 +40,9 @@ export class BranchColors {
 	 * Color a single branch (node + all descendants + edges).
 	 */
 	private colorBranch(canvas: Canvas, node: TreeNode, color: string): void {
-		// Color the node itself
-		node.canvasNode.setColor(color);
+		// A neutral leaf remains visually distinct while its incoming edge
+		// keeps the branch color and still communicates its ancestry.
+		node.canvasNode.setColor(getBranchNodeColor(color, node.children.length, this.colorLeafNodes));
 
 		// Color the edge connecting to this node from its parent
 		const incomingEdge = this.findIncomingEdge(canvas, node.canvasNode);

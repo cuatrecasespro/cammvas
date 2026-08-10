@@ -1,6 +1,7 @@
 import type { Canvas, CanvasNode } from "../types/canvas-internal";
 import { CanvasAPI } from "../canvas/canvas-api";
 import { buildForest, findTreeForNode, countChildrenPerSide, BranchDirection } from "./tree-model";
+import { collectDescendantIds } from "../canvas/drag-reparent-state";
 
 export interface NodeOpsConfig {
 	nodeWidth: number;
@@ -115,6 +116,36 @@ export class NodeOperations {
 
 		canvas.requestSave();
 		return newNode;
+	}
+
+	/** Replace a node's incoming edge while preserving its complete subtree. */
+	reparent(canvas: Canvas, node: CanvasNode, newParent: CanvasNode): boolean {
+		if (node.id === newParent.id) return false;
+
+		const descendants = collectDescendantIds(
+			node.id,
+			(nodeId) => this.canvasApi.getOutgoingEdges(canvas, nodeId).map((edge) => edge.to.node.id)
+		);
+		if (descendants.has(newParent.id)) return false;
+
+		const incomingEdges = this.canvasApi.getConnectedEdges(canvas, node)
+			.filter((edge) => edge.to.node.id === node.id);
+		if (incomingEdges.length === 1 && incomingEdges[0].from.node.id === newParent.id) {
+			return false;
+		}
+
+		for (const edge of incomingEdges) canvas.removeEdge(edge);
+		this.canvasApi.invalidateEdgeIndex();
+
+		const nodeCenterX = node.x + node.width / 2;
+		const parentCenterX = newParent.x + newParent.width / 2;
+		if (nodeCenterX >= parentCenterX) {
+			this.canvasApi.createEdge(canvas, newParent, node, "right", "left", newParent.color || undefined);
+		} else {
+			this.canvasApi.createEdge(canvas, newParent, node, "left", "right", newParent.color || undefined);
+		}
+
+		return true;
 	}
 
 	/**

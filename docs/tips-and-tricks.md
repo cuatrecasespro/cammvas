@@ -1,5 +1,5 @@
 ---
-description: Power user tips for getting the most out of Mindvas.
+description: Power user tips for getting the most out of Cammvas.
 ---
 
 # Tips and tricks

@@ -56,7 +56,7 @@ export class LayoutEngine {
 	 * Each root's children are partitioned into left/right groups and
 	 * laid out independently, centered around their own root.
 	 */
-	layout(canvas: Canvas): void {
+	layout(canvas: Canvas, skipAnimationNodeIds: ReadonlySet<string> = new Set()): void {
 		const forest = buildForest(canvas);
 		if (forest.length === 0) return;
 
@@ -76,7 +76,7 @@ export class LayoutEngine {
 			this.layoutGroup(root, leftChildren, "left", rootX, rootY, positions);
 		}
 
-		this.applyPositions(canvas, positions);
+		this.applyPositions(canvas, positions, skipAnimationNodeIds);
 		updateAllEdgeSides(canvas);
 	}
 
@@ -85,7 +85,11 @@ export class LayoutEngine {
 	 * (and their subtrees). The parent stays in place; everything
 	 * outside this parent's subtree is untouched.
 	 */
-	layoutChildren(canvas: Canvas, parentNodeId: string): void {
+	layoutChildren(
+		canvas: Canvas,
+		parentNodeId: string,
+		skipAnimationNodeIds: ReadonlySet<string> = new Set()
+	): void {
 		const forest = buildForest(canvas);
 		if (forest.length === 0) return;
 
@@ -119,7 +123,7 @@ export class LayoutEngine {
 			this.layoutGroup(parentTreeNode, leftChildren, "left", px, py, positions);
 		}
 
-		this.applyPositions(canvas, positions);
+		this.applyPositions(canvas, positions, skipAnimationNodeIds);
 		updateAllEdgeSides(canvas);
 	}
 
@@ -440,14 +444,17 @@ export class LayoutEngine {
 	 */
 	private applyPositions(
 		canvas: Canvas,
-		positions: Map<string, NodePosition>
+		positions: Map<string, NodePosition>,
+		skipAnimationNodeIds: ReadonlySet<string> = new Set()
 	): void {
 		for (const [nodeId, pos] of positions) {
 			const node = canvas.nodes.get(nodeId);
 			if (!node) continue;
 
-			if (this.config.animate) {
+			if (this.config.animate && !skipAnimationNodeIds.has(nodeId)) {
 				node.nodeEl?.addClass("mindmap-animating");
+			} else {
+				node.nodeEl?.removeClass("mindmap-animating");
 			}
 
 			node.moveTo({ x: pos.x, y: pos.y });

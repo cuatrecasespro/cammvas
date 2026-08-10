@@ -2,7 +2,7 @@ import { ItemView, WorkspaceLeaf, setIcon, Menu, Notice, SearchComponent } from 
 import type { Canvas, CanvasNode, CanvasView as CanvasViewType } from "../types/canvas-internal";
 import { buildForest, TreeNode, getDescendants, getGroupIds } from "../mindmap/tree-model";
 
-export const OUTLINE_VIEW_TYPE = "mindvas-outline";
+export const OUTLINE_VIEW_TYPE = "cammvas-outline";
 
 interface GroupInfo {
 	node: CanvasNode;
@@ -18,6 +18,7 @@ interface GroupInfo {
 export class OutlineView extends ItemView {
 	private canvasLeaf: WorkspaceLeaf | null = null;
 	private collapsedGroups = new Set<string>();
+	private collapsedNodes = new Set<string>();
 	private selectedRoots = new Set<TreeNode>();
 	private lastCanvas: Canvas | null = null;
 	private groupIds: string[] = [];
@@ -51,7 +52,7 @@ export class OutlineView extends ItemView {
 	}
 
 	onOpen(): Promise<void> {
-		this.contentEl.addClass("mindvas-outline");
+		this.contentEl.addClass("cammvas-outline");
 
 		// Create nav-header on containerEl (sibling of view-content, like native Obsidian)
 		const navHeader = this.containerEl.createDiv({ cls: "nav-header" });
@@ -86,7 +87,7 @@ export class OutlineView extends ItemView {
 		});
 
 		// Search input container
-		this.searchContainerEl = navHeader.createDiv({ cls: "mindvas-outline-search-container" });
+		this.searchContainerEl = navHeader.createDiv({ cls: "cammvas-outline-search-container" });
 		this.searchContainerEl.hide();
 		this.searchComponent = new SearchComponent(this.searchContainerEl);
 		this.searchComponent.setPlaceholder("Filter...");
@@ -145,7 +146,7 @@ export class OutlineView extends ItemView {
 		const forest = buildForest(canvas);
 		if (forest.length === 0) {
 			this.contentEl.createDiv({
-				cls: "mindvas-outline-empty",
+				cls: "cammvas-outline-empty",
 				text: "No root nodes",
 			});
 			return;
@@ -200,7 +201,7 @@ export class OutlineView extends ItemView {
 		}
 
 		// Render ungrouped roots in a drop zone (accepts trees dragged out of groups)
-		const ungroupedZone = this.contentEl.createDiv({ cls: "mindvas-outline-ungrouped-zone" });
+		const ungroupedZone = this.contentEl.createDiv({ cls: "cammvas-outline-ungrouped-zone" });
 		ungroupedZone.addEventListener("dragover", (e) => {
 			if (!this.draggedRoot || !this.dragSourceGroupId) return;
 			e.preventDefault();
@@ -246,34 +247,25 @@ export class OutlineView extends ItemView {
 
 	private applyFilter(): void {
 		const q = this.searchQuery.toLowerCase().trim();
+		this.contentEl.toggleClass("is-searching", q !== "");
 
-		// Filter ungrouped roots
-		const ungroupedZone = this.contentEl.querySelector(".mindvas-outline-ungrouped-zone");
-		if (ungroupedZone) {
-			for (const item of Array.from(ungroupedZone.querySelectorAll(":scope > .tree-item"))) {
-				const text = item.querySelector(".tree-item-inner")?.textContent?.toLowerCase() ?? "";
-				(item as HTMLElement).toggleClass("is-hidden", q !== "" && !text.includes(q));
-			}
+		for (const root of Array.from(this.contentEl.querySelectorAll<HTMLElement>(".cammvas-outline-root-tree"))) {
+			const text = root.textContent?.toLowerCase() ?? "";
+			root.toggleClass("is-hidden", q !== "" && !text.includes(q));
 		}
 
-		// Filter groups: show if group label or any child root matches
-		for (const groupItem of Array.from(this.contentEl.querySelectorAll(":scope > .tree-item"))) {
-			const el = groupItem as HTMLElement;
-			const groupHeader = el.querySelector(".mindvas-outline-group .tree-item-inner");
-			if (!groupHeader) continue; // not a group tree-item
-
-			const label = groupHeader.querySelector("span")?.textContent?.toLowerCase() ?? "";
-			const groupLabelMatches = q === "" || label.includes(q);
-
-			let anyChildVisible = false;
-			for (const child of Array.from(el.querySelectorAll(".tree-item-children > .tree-item"))) {
-				const childText = child.querySelector(".tree-item-inner")?.textContent?.toLowerCase() ?? "";
-				const childMatches = q === "" || childText.includes(q);
-				(child as HTMLElement).toggleClass("is-hidden", !childMatches && !groupLabelMatches);
-				if (childMatches || groupLabelMatches) anyChildVisible = true;
+		for (const group of Array.from(this.contentEl.querySelectorAll<HTMLElement>(":scope > .tree-item"))) {
+			const header = group.querySelector<HTMLElement>(":scope > .cammvas-outline-group");
+			if (!header) continue;
+			const groupLabel = header.querySelector(".tree-item-inner span")?.textContent?.toLowerCase() ?? "";
+			const groupLabelMatches = q !== "" && groupLabel.includes(q);
+			if (groupLabelMatches) {
+				for (const root of Array.from(group.querySelectorAll<HTMLElement>(".cammvas-outline-root-tree"))) {
+					root.removeClass("is-hidden");
+				}
 			}
-
-			el.toggleClass("is-hidden", q !== "" && !groupLabelMatches && !anyChildVisible);
+			const matches = groupLabelMatches || (group.textContent?.toLowerCase() ?? "").includes(q);
+			group.toggleClass("is-hidden", q !== "" && !matches);
 		}
 	}
 
@@ -287,19 +279,26 @@ export class OutlineView extends ItemView {
 		isUngrouped: boolean,
 		groupId?: string
 	): void {
-		const treeItem = container.createDiv({ cls: "tree-item" });
+		const treeItem = container.createDiv({ cls: "tree-item cammvas-outline-root-tree" });
+		treeItem.dataset.nodeId = root.canvasNode.id;
 		const self = treeItem.createDiv({
-			cls: "tree-item-self is-clickable mindvas-outline-item",
+			cls: "tree-item-self is-clickable cammvas-outline-item",
 		});
+		if (root.children.length > 0) {
+			const collapseIcon = self.createDiv({ cls: "tree-item-icon collapse-icon" });
+			setIcon(collapseIcon, "right-triangle");
+			treeItem.toggleClass("is-collapsed", this.collapsedNodes.has(root.canvasNode.id));
+			collapseIcon.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.toggleNodeCollapse(treeItem, root.canvasNode.id);
+			});
+		}
 
 		// Drag handle (before text content)
-		const dragHandle = self.createDiv({ cls: "tree-item-icon mindvas-outline-drag-handle" });
+		const dragHandle = self.createDiv({ cls: "tree-item-icon cammvas-outline-drag-handle" });
 		setIcon(dragHandle, "grip-vertical");
 
-		self.createDiv({
-			cls: "tree-item-inner",
-			text: getRootTitle(root.canvasNode.text),
-		});
+		self.createDiv({ cls: "tree-item-inner", text: getRootTitle(root.canvasNode.text) });
 
 		// Handle-based drag: only start drag when pointerdown on grip icon
 		let dragAllowed = false;
@@ -365,7 +364,7 @@ export class OutlineView extends ItemView {
 					.setIcon("link")
 					.onClick(() => {
 						const canvasPath = canvas.view.file.path;
-						void navigator.clipboard.writeText(`obsidian://mindvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${root.canvasNode.id}`);
+						void navigator.clipboard.writeText(`obsidian://cammvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${root.canvasNode.id}`);
 						new Notice("Node link copied");
 					});
 			});
@@ -384,6 +383,79 @@ export class OutlineView extends ItemView {
 			}
 			menu.showAtMouseEvent(e);
 		});
+
+		if (root.children.length > 0) {
+			const children = treeItem.createDiv({ cls: "tree-item-children" });
+			for (const child of root.children) this.renderChildItem(children, child, canvas);
+		}
+	}
+
+	private renderChildItem(container: HTMLElement, node: TreeNode, canvas: Canvas): void {
+		const treeItem = container.createDiv({ cls: "tree-item cammvas-outline-node-tree" });
+		treeItem.dataset.nodeId = node.canvasNode.id;
+		const self = treeItem.createDiv({
+			cls: "tree-item-self is-clickable cammvas-outline-item",
+		});
+		const collapseIcon = self.createDiv({ cls: "tree-item-icon collapse-icon" });
+		if (node.children.length > 0) {
+			setIcon(collapseIcon, "right-triangle");
+			treeItem.toggleClass("is-collapsed", this.collapsedNodes.has(node.canvasNode.id));
+			collapseIcon.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.toggleNodeCollapse(treeItem, node.canvasNode.id);
+			});
+		}
+
+		self.createDiv({ cls: "tree-item-inner", text: getRootTitle(node.canvasNode.text) });
+		this.allItemEls.set(node.canvasNode.id, self);
+
+		self.addEventListener("click", () => this.navigateToNode(canvas, node.canvasNode));
+		self.addEventListener("contextmenu", (e) => {
+			e.preventDefault();
+			const menu = new Menu();
+			menu.addItem((item) => {
+				item.setTitle("Copy node link")
+					.setIcon("link")
+					.onClick(() => {
+						const canvasPath = canvas.view.file.path;
+						void navigator.clipboard.writeText(`obsidian://cammvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${node.canvasNode.id}`);
+						new Notice("Node link copied");
+					});
+			});
+			menu.showAtMouseEvent(e);
+		});
+
+		if (node.children.length > 0) {
+			const children = treeItem.createDiv({ cls: "tree-item-children" });
+			for (const child of node.children) this.renderChildItem(children, child, canvas);
+		}
+	}
+
+	private toggleNodeCollapse(treeItem: HTMLElement, nodeId: string): void {
+		if (this.collapsedNodes.has(nodeId)) {
+			this.collapsedNodes.delete(nodeId);
+			treeItem.removeClass("is-collapsed");
+		} else {
+			this.collapsedNodes.add(nodeId);
+			treeItem.addClass("is-collapsed");
+		}
+	}
+
+	private navigateToNode(canvas: Canvas, node: CanvasNode): void {
+		this.clearSelection();
+		this.setActiveItem(node.id);
+		if (this.canvasLeaf) {
+			this.app.workspace.setActiveLeaf(this.canvasLeaf, { focus: true });
+		}
+		canvas.selectOnly(node);
+		const cx = node.x + node.width / 2;
+		const cy = node.y + node.height / 2;
+		canvas.zoomToBbox({
+			minX: cx - this.zoomPadding,
+			minY: cy - this.zoomPadding,
+			maxX: cx + this.zoomPadding,
+			maxY: cy + this.zoomPadding,
+		});
 	}
 
 	private clearSelection(): void {
@@ -399,8 +471,21 @@ export class OutlineView extends ItemView {
 		}
 		this.activeNodeId = nodeId;
 		const el = this.allItemEls.get(nodeId);
+		this.revealItem(el);
 		el?.addClass("is-active");
 		el?.scrollIntoView({ block: "nearest" });
+	}
+
+	private revealItem(item: HTMLElement | undefined): void {
+		let ancestor = item?.parentElement?.parentElement?.closest<HTMLElement>(".tree-item.is-collapsed") ?? null;
+		while (ancestor) {
+			ancestor.removeClass("is-collapsed");
+			const nodeId = ancestor.dataset.nodeId;
+			const groupId = ancestor.dataset.groupId;
+			if (nodeId) this.collapsedNodes.delete(nodeId);
+			if (groupId) this.collapsedGroups.delete(groupId);
+			ancestor = ancestor.parentElement?.closest<HTMLElement>(".tree-item.is-collapsed") ?? null;
+		}
 	}
 
 	private clearActiveItem(): void {
@@ -487,9 +572,10 @@ export class OutlineView extends ItemView {
 		const treeItem = this.contentEl.createDiv({
 			cls: "tree-item" + (isCollapsed ? " is-collapsed" : ""),
 		});
+		treeItem.dataset.groupId = group.node.id;
 
 		const self = treeItem.createDiv({
-			cls: "tree-item-self is-clickable mindvas-outline-group",
+			cls: "tree-item-self is-clickable cammvas-outline-group",
 		});
 
 		const collapseIcon = self.createDiv({ cls: "tree-item-icon collapse-icon" });
@@ -497,7 +583,7 @@ export class OutlineView extends ItemView {
 
 		const labelContainer = self.createDiv({ cls: "tree-item-inner" });
 		const labelSpan = labelContainer.createSpan({ text: group.label });
-		labelContainer.createSpan({ cls: "mindvas-outline-group-count", text: `${group.roots.length}` });
+		labelContainer.createSpan({ cls: "cammvas-outline-group-count", text: `${group.roots.length}` });
 
 		// Drop target for drag-and-drop
 		this.groupElMap.set(group.node.id, self);
@@ -697,12 +783,13 @@ export class OutlineView extends ItemView {
 		this.groupElMap.clear();
 		this.allItemEls.clear();
 		this.collapsedGroups.clear();
+		this.collapsedNodes.clear();
 		this.activeNodeId = null;
 		this.draggedRoot = null;
 		this.dragSourceGroupId = null;
 		this.contentEl.empty();
 		this.contentEl.createDiv({
-			cls: "mindvas-outline-empty",
+			cls: "cammvas-outline-empty",
 			text: "Open a canvas to see root nodes",
 		});
 	}

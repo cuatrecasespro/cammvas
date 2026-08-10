@@ -14,7 +14,9 @@ import {
 } from "./settings";
 import { registerDragEndHandler } from "./canvas/edge-updater";
 import { registerSubtreeDragHandler } from "./canvas/subtree-drag";
+import { registerDragReparent } from "./canvas/drag-reparent";
 import { registerGroupDragHandler } from "./canvas/group-drag";
+import { registerBranchCollapse, BranchCollapseHandle } from "./canvas/branch-collapse";
 import { registerAutoResize, AutoResizeHandle, getEditorElements } from "./ui/auto-resize";
 import { OutlineView, OUTLINE_VIEW_TYPE } from "./ui/outline-view";
 import { freemindToCanvas } from "./import/freemind-import";
@@ -33,10 +35,13 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private cleanupClickHandler: (() => void) | null = null;
 	private cleanupDragHandler: (() => void) | null = null;
 	private cleanupSubtreeDragHandler: (() => void) | null = null;
+	private cleanupDragReparentHandler: (() => void) | null = null;
 	private cleanupGroupDragHandler: (() => void) | null = null;
 	private autoResizeHandle: AutoResizeHandle | null = null;
+	private branchCollapseHandle: BranchCollapseHandle | null = null;
 	private interceptedCanvas: Canvas | null = null;
 	private toggleBtnEl: HTMLElement | null = null;
+	private dragReparentBtnEl: HTMLElement | null = null;
 	private cleanupGroupBoundsHandler: (() => void) | null = null;
 	private cleanupSelectionSyncHandler: (() => void) | null = null;
 	private cleanupInsertNodeHandler: (() => void) | null = null;
@@ -78,7 +83,11 @@ export default class CanvasMindMapPlugin extends Plugin {
 			nodeWidth: this.settings.defaultNodeWidth,
 			nodeHeight: this.settings.defaultNodeHeight,
 		});
-		this.branchColors = new BranchColors(this.canvasApi);
+		this.branchColors = new BranchColors(
+			this.canvasApi,
+			this.settings.branchPalette,
+			this.settings.colorLeafNodes
+		);
 		this.navigation = new Navigation(this.canvasApi);
 
 		// Register keyboard shortcuts
@@ -89,6 +98,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.layoutEngine,
 			this.branchColors,
 			() => this.settings.autoColor,
+			() => this.settings.autoLayout,
+			() => this.settings.arrowKeyNavigation,
+			() => this.settings.enterCreatesSibling,
 			(canvas: Canvas) => this.isMindmapCanvas(canvas),
 			(canvas: Canvas) => this.updateGroupBounds(canvas)
 		);
@@ -106,6 +118,20 @@ export default class CanvasMindMapPlugin extends Plugin {
 				if (checking) return true;
 				this.layoutEngine.layout(canvas);
 				this.updateGroupBounds(canvas);
+			},
+		});
+
+		// Command: Create an independent root at the center of the visible canvas
+		this.addCommand({
+			id: "mindmap-create-root",
+			name: "Create root node",
+			hotkeys: [{ modifiers: ["Shift"], key: "Enter" }],
+			checkCallback: (checking: boolean) => {
+				const canvas = this.canvasApi.getActiveCanvas();
+				if (!canvas || !this.isMindmapCanvas(canvas)) return false;
+				if (this.canvasApi.getSelectedNode(canvas)?.isEditing) return false;
+				if (checking) return true;
+				this.createRootNode();
 			},
 		});
 
@@ -172,7 +198,8 @@ export default class CanvasMindMapPlugin extends Plugin {
 
 				node.setColor("");
 
-				this.layoutEngine.layoutChildren(canvas, parent.id);
+				if (this.settings.autoLayout) this.layoutEngine.layoutChildren(canvas, parent.id);
+				if (this.settings.autoColor) this.branchColors.applyColors(canvas);
 				this.updateGroupBounds(canvas);
 				canvas.requestSave();
 			},
@@ -277,7 +304,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 						.setIcon("link")
 						.onClick(() => {
 							const canvasPath = node.canvas.view.file.path;
-							void navigator.clipboard.writeText(`obsidian://mindvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${node.id}`);
+							void navigator.clipboard.writeText(`obsidian://cammvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${node.id}`);
 							new Notice("Node link copied");
 						});
 				});
@@ -298,8 +325,8 @@ export default class CanvasMindMapPlugin extends Plugin {
 			})
 		);
 
-		// Node referencing: handle obsidian://mindvas-navigate protocol
-		this.registerObsidianProtocolHandler("mindvas-navigate", async (params) => {
+		// Node referencing: handle obsidian://cammvas-navigate protocol
+		this.registerObsidianProtocolHandler("cammvas-navigate", async (params) => {
 			const nodeId = params.id;
 			if (!nodeId) return;
 
@@ -412,6 +439,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.cleanupSubtreeDragHandler();
 			this.cleanupSubtreeDragHandler = null;
 		}
+		if (this.cleanupDragReparentHandler) {
+			this.cleanupDragReparentHandler();
+			this.cleanupDragReparentHandler = null;
+		}
 		if (this.cleanupGroupDragHandler) {
 			this.cleanupGroupDragHandler();
 			this.cleanupGroupDragHandler = null;
@@ -436,10 +467,19 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.autoResizeHandle.cleanup();
 			this.autoResizeHandle = null;
 		}
+		if (this.branchCollapseHandle) {
+			this.branchCollapseHandle.cleanup();
+			this.branchCollapseHandle = null;
+		}
+		this.keyboardHandler.unregisterArrowKeyNavigation();
 		this.lastNavCanvas = null;
 		if (this.toggleBtnEl) {
 			this.toggleBtnEl.remove();
 			this.toggleBtnEl = null;
+		}
+		if (this.dragReparentBtnEl) {
+			this.dragReparentBtnEl.remove();
+			this.dragReparentBtnEl = null;
 		}
 	}
 
@@ -469,6 +509,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.cleanupSubtreeDragHandler();
 			this.cleanupSubtreeDragHandler = null;
 		}
+		if (this.cleanupDragReparentHandler) {
+			this.cleanupDragReparentHandler();
+			this.cleanupDragReparentHandler = null;
+		}
 		if (this.cleanupGroupDragHandler) {
 			this.cleanupGroupDragHandler();
 			this.cleanupGroupDragHandler = null;
@@ -493,6 +537,11 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.autoResizeHandle.cleanup();
 			this.autoResizeHandle = null;
 		}
+		if (this.branchCollapseHandle) {
+			this.branchCollapseHandle.cleanup();
+			this.branchCollapseHandle = null;
+		}
+		this.keyboardHandler.unregisterArrowKeyNavigation();
 
 		const canvas = this.canvasApi.getActiveCanvas();
 
@@ -510,9 +559,16 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.toggleBtnEl.remove();
 				this.toggleBtnEl = null;
 			}
+			if (this.dragReparentBtnEl) {
+				this.dragReparentBtnEl.remove();
+				this.dragReparentBtnEl = null;
+			}
 			this.hideOutline();
 			return;
 		}
+
+		// Register after Canvas so Cammvas takes precedence over native node nudging.
+		this.keyboardHandler.registerArrowKeyNavigation(canvas);
 
 		// Inject mindmap toggle button into canvas toolbar
 		this.injectToggleButton(canvas);
@@ -529,9 +585,25 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.cleanupSubtreeDragHandler =
 			registerSubtreeDragHandler(canvas, this.canvasApi);
 
+		this.cleanupDragReparentHandler = registerDragReparent(
+			canvas,
+			this.canvasApi,
+			() => this.settings.dragToReparent && this.isMindmapCanvas(canvas),
+			(node, newParent) => {
+				if (!this.nodeOps.reparent(canvas, node, newParent)) return;
+				if (this.settings.autoLayout) this.layoutEngine.layout(canvas);
+				if (this.settings.autoColor) this.branchColors.applyColors(canvas);
+				this.updateGroupBounds(canvas);
+				this.branchCollapseHandle?.refresh();
+			}
+		);
+
 		// Set up group drag handler (Alt+drag leaves stranger nodes behind)
 		this.cleanupGroupDragHandler =
 			registerGroupDragHandler(canvas, this.canvasApi);
+
+		// Add persistent collapse controls to nodes that have descendants.
+		this.branchCollapseHandle = registerBranchCollapse(canvas, this.canvasApi);
 
 		// Update group bounds after any drag operation (deferred to let positions settle)
 		const onDragEnd = () => this.trackedRaf(() => this.updateGroupBounds(canvas));
@@ -665,7 +737,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 					let root = treeNode;
 					while (root.parent) root = root.parent;
 					this.resizeNodes(canvas, this.collectSubtreeNodes(canvas, root.canvasNode));
-					this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
+					if (this.settings.autoLayout) this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
 					this.updateGroupBounds(canvas);
 				});
 			}
@@ -724,6 +796,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 
 		canvas.requestSave = () => {
 			origSave();
+			this.branchCollapseHandle?.refresh();
 			this.debouncedOutlineRefresh();
 		};
 		canvas.createGroupNode = (options: CreateNodeOptions & { label?: string }) => {
@@ -734,12 +807,16 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (origUndo) {
 			canvas.undo = () => {
 				origUndo();
+				this.canvasApi.invalidateEdgeIndex();
+				this.branchCollapseHandle?.refresh();
 				this.debouncedOutlineRefresh();
 			};
 		}
 		if (origRedo) {
 			canvas.redo = () => {
 				origRedo();
+				this.canvasApi.invalidateEdgeIndex();
+				this.branchCollapseHandle?.refresh();
 				this.debouncedOutlineRefresh();
 			};
 		}
@@ -899,7 +976,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (!treeNode) return;
 		let root = treeNode;
 		while (root.parent) root = root.parent;
-		this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
+		if (this.settings.autoLayout) this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
 		this.updateGroupBounds(canvas);
 	}
 
@@ -1015,7 +1092,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (treeNode) {
 			let root = treeNode;
 			while (root.parent) root = root.parent;
-			this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
+			if (this.settings.autoLayout) {
+				this.layoutEngine.layoutChildren(canvas, root.canvasNode.id, new Set([newNode.id]));
+			}
 		}
 		if (this.settings.autoColor && this.isMindmapCanvas(canvas)) {
 			this.branchColors.applyColors(canvas);
@@ -1152,12 +1231,15 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.toggleBtnEl.remove();
 			this.toggleBtnEl = null;
 		}
-
+		if (this.dragReparentBtnEl) {
+			this.dragReparentBtnEl.remove();
+			this.dragReparentBtnEl = null;
+		}
 		const controls = canvas.view.containerEl.querySelector('.canvas-controls');
 		if (!controls) return;
 
 		const btn = document.createElement('div');
-		btn.addClass('mindvas-toggle-btn', 'clickable-icon');
+		btn.addClass('cammvas-toggle-btn', 'clickable-icon');
 		btn.setAttribute('aria-label', 'Toggle mindmap mode');
 		this.registerDomEvent(btn, 'click', (e) => {
 			e.stopPropagation();
@@ -1166,7 +1248,20 @@ export default class CanvasMindMapPlugin extends Plugin {
 
 		controls.prepend(btn);
 		this.toggleBtnEl = btn;
+
+		const dragBtn = document.createElement('div');
+		dragBtn.addClass('cammvas-toggle-btn', 'cammvas-drag-reparent-btn', 'clickable-icon');
+		this.registerDomEvent(dragBtn, 'click', (e) => {
+			e.stopPropagation();
+			this.settings.dragToReparent = !this.settings.dragToReparent;
+			this.updateDragReparentButton();
+			void this.saveSettings();
+		});
+		btn.after(dragBtn);
+		this.dragReparentBtnEl = dragBtn;
+
 		this.updateToggleButton(canvas);
+		this.updateDragReparentButton();
 	}
 
 	private updateToggleButton(canvas: Canvas): void {
@@ -1177,6 +1272,18 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.toggleBtnEl.toggleClass('is-active', isActive);
 		this.toggleBtnEl.setAttribute('aria-label',
 			isActive ? 'Mindmap mode (active)' : 'Mindmap mode (inactive)');
+	}
+
+	private updateDragReparentButton(): void {
+		if (!this.dragReparentBtnEl) return;
+		const isActive = this.settings.dragToReparent;
+		this.dragReparentBtnEl.empty();
+		setIcon(this.dragReparentBtnEl, 'git-branch');
+		this.dragReparentBtnEl.toggleClass('is-active', isActive);
+		this.dragReparentBtnEl.setAttribute(
+			'aria-label',
+			isActive ? 'Drag to reparent (active)' : 'Drag to reparent (inactive)'
+		);
 	}
 
 	/** Schedule a setTimeout that is automatically cancelled on unload/canvas switch. */
@@ -1254,12 +1361,72 @@ export default class CanvasMindMapPlugin extends Plugin {
 			horizontalGap: this.settings.horizontalGap,
 			verticalGap: this.settings.verticalGap,
 		});
+		this.branchColors = new BranchColors(
+			this.canvasApi,
+			this.settings.branchPalette,
+			this.settings.colorLeafNodes
+		);
 
 		// Update keyboard handler references so it uses the new instances
 		if (this.keyboardHandler) {
 			this.keyboardHandler.nodeOps = this.nodeOps;
 			this.keyboardHandler.layoutEngine = this.layoutEngine;
+			this.keyboardHandler.branchColors = this.branchColors;
 			this.keyboardHandler.zoomPadding = this.settings.navigationZoomPadding;
 		}
+		this.updateDragReparentButton();
+
+		const canvas = this.canvasApi.getActiveCanvas();
+		if (canvas && this.settings.autoColor && this.isMindmapCanvas(canvas)) {
+			this.branchColors.applyColors(canvas);
+		}
+	}
+
+	private createRootNode(): void {
+		const canvas = this.canvasApi?.getActiveCanvas();
+		if (!canvas) {
+			new Notice("Open a Canvas before creating a root node");
+			return;
+		}
+		if (!this.isMindmapCanvas(canvas)) {
+			new Notice("Enable mindmap mode before creating a root node");
+			return;
+		}
+
+		const incomingIds = new Set(
+			Array.from(canvas.edges.values(), (edge) => edge.to.node.id)
+		);
+		const groupIds = getGroupIds(canvas);
+		const roots = Array.from(canvas.nodes.values()).filter(
+			(node) => !groupIds.has(node.id) && !incomingIds.has(node.id)
+		);
+
+		let x: number;
+		let y: number;
+		const previousRoot = roots[roots.length - 1];
+		if (previousRoot) {
+			const subtree = this.collectSubtreeNodes(canvas, previousRoot);
+			const subtreeBottom = Math.max(...subtree.map((node) => node.y + node.height));
+			x = previousRoot.x;
+			y = subtreeBottom + Math.max(40, this.settings.verticalGap * 2);
+		} else {
+			const rect = canvas.wrapperEl.getBoundingClientRect();
+			const center = canvas.posFromEvt(new MouseEvent("mousemove", {
+				clientX: rect.left + rect.width / 2,
+				clientY: rect.top + rect.height / 2,
+			}));
+			x = center.x - this.settings.defaultNodeWidth / 2;
+			y = center.y - this.settings.defaultNodeHeight / 2;
+		}
+		const node = this.canvasApi.createTextNode(
+			canvas,
+			x,
+			y,
+			"",
+			this.settings.defaultNodeWidth,
+			this.settings.defaultNodeHeight
+		);
+		canvas.requestSave();
+		this.canvasApi.selectAndEdit(canvas, node, this.settings.navigationZoomPadding);
 	}
 }

@@ -1,10 +1,10 @@
 ---
-description: Complete list of all Mindvas commands.
+description: Complete list of all Cammvas commands.
 ---
 
 # Commands
 
-All commands are available from the command palette (`Ctrl/Cmd+P`). Search for "Mindvas" to find them. No default hotkeys are set — assign your own in **Settings > Hotkeys**.
+All commands are available from the command palette (`Ctrl/Cmd+P`). Search for "Cammvas" to find them. Default hotkeys can be changed in **Settings > Hotkeys**.
 
 ## Node editing
 
@@ -13,6 +13,7 @@ All commands are available from the command palette (`Ctrl/Cmd+P`). Search for "
 | Edit selected node           | Start editing the selected node's text                                                      |
 | Add child node               | Create a child node from the selected node. If text is selected, it moves to the child      |
 | Add sibling node             | Create a sibling node next to the current one. If text is selected, it moves to the sibling |
+| Create root node             | Create an independent root at the center of the visible canvas                            |
 | Delete node and focus parent | Remove the current node and select its parent                                               |
 
 ## Navigation
@@ -49,19 +50,22 @@ All commands are available from the command palette (`Ctrl/Cmd+P`). Search for "
 | Detach subtree as independent tree   | Disconnect a branch from its parent                   |
 | Import mind map (.mm) file to canvas | Import a FreeMind/Coggle file into a new canvas       |
 
-## Suggested hotkeys
+## Hotkeys
 
-| Command                      | Suggested hotkey           |
+| Command                      | Hotkey                     |
 | ---------------------------- | -------------------------- |
 | Edit selected node           | `Enter`                    |
-| Add child node               | `Ctrl + .`                 |
-| Add sibling node             | `Ctrl + Enter`             |
+| Add child node               | `Shift + Tab` (default)    |
+| Add sibling node             | `Shift + º` (default)      |
+| Create root node             | `Shift + Enter` (default)  |
 | Delete node and focus parent | `Ctrl + Shift + Backspace` |
 | Flip branch                  | `Ctrl + Shift + S`         |
 | Toggle balanced layout       | `Ctrl + Shift + D`         |
-| Navigate right/left/up/down  | `Ctrl + Alt + Arrow keys`  |
+| Navigate right/left/up/down  | `Arrow keys`               |
 | Resize & re-layout subtree   | `Ctrl + Shift + L`         |
 
 {% hint style="info" %}
-Mindvas includes a physical-key fallback for non-Latin keyboard layouts. See [Working with RTL content](/broken/pages/T0FxqT2PDsBShPB5TUm4).
+Cammvas includes a physical-key fallback for non-Latin keyboard layouts. See [Working with RTL content](/broken/pages/T0FxqT2PDsBShPB5TUm4).
 {% endhint %}
+
+When **Mind mapping Enter and Tab** is enabled, plain `Enter` creates a sibling while editing, `Tab` creates a child from the selected node, and `Shift + Enter` inserts a line break. The create-root hotkey is ignored while a node is being edited.

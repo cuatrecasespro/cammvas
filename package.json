@@ -1,21 +1,29 @@
 {
-	"name": "mindvas",
-	"version": "0.3.0",
-	"description": "Turn Canvas into a powerful mind mapping tool",
+	"name": "cammvas",
+	"version": "1.0.0",
+	"description": "Dedicated mind-mapping workflows inside Obsidian Canvas",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "vitest run"
 	},
-	"keywords": [],
-	"author": "",
+	"keywords": ["obsidian", "canvas", "mind-map", "mind-mapping"],
+	"author": "cuatrecasespro",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cuatrecasespro/cammvas.git"
+	},
+	"bugs": "https://github.com/cuatrecasespro/cammvas/issues",
+	"homepage": "https://github.com/cuatrecasespro/cammvas#readme",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^20.11.0",
 		"builtin-modules": "^3.3.0",
-		"esbuild": "0.20.0",
+		"esbuild": "^0.28.1",
 		"obsidian": "latest",
 		"tslib": "2.6.2",
-		"typescript": "5.3.3"
+		"typescript": "5.3.3",
+		"vitest": "^4.1.10"
 	}
 }

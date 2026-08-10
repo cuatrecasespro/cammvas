@@ -35,6 +35,12 @@ export interface CanvasNode {
 	labelEl?: HTMLElement;
 	isEditing: boolean;
 	unknownData: Record<string, unknown>;
+	zIndex: number;
+	child?: {
+		editor?: {
+			hasFocus: () => boolean;
+		};
+	};
 
 	moveTo(pos: { x: number; y: number }): void;
 	moveAndResize(pos: {
@@ -60,7 +66,16 @@ export interface CanvasEdge {
 	canvas: Canvas;
 	lineEl?: HTMLElement;
 	lineGroupEl?: HTMLElement;
-	path?: { display: SVGPathElement };
+	lineEndGroupEl?: Element;
+	startGroupEl?: Element;
+	endGroupEl?: Element;
+	fromLineEnd?: { el?: Element };
+	toLineEnd?: { el?: Element };
+	labelElement?: { wrapperEl?: HTMLElement };
+	path?: {
+		display: SVGPathElement;
+		interaction?: SVGPathElement;
+	};
 
 	setColor(color: string): void;
 }
@@ -124,6 +139,11 @@ export interface Canvas {
 	zoomToFit(): void;
 
 	posFromEvt(e: MouseEvent): { x: number; y: number };
+	handleSelectionDrag?: (
+		event: PointerEvent,
+		dragEl: HTMLElement,
+		directNode?: CanvasNode
+	) => CanvasDragHandler | void;
 
 	undo?: () => void;
 	redo?: () => void;
@@ -133,6 +153,16 @@ export interface CanvasFileData {
 	nodes: CanvasNodeFileData[];
 	edges: CanvasEdgeFileData[];
 	mindmap?: boolean;
+	mindmapCollapsed?: string[];
+}
+
+export interface CanvasDragHandler {
+	move?: (event: PointerEvent) => void;
+	end?: (event: PointerEvent) => void;
+	cancel?: () => void;
+	cleanup?: () => void;
+	keydown?: (event: KeyboardEvent) => void;
+	keyup?: (event: KeyboardEvent) => void;
 }
 
 export interface CanvasNodeFileData {
@@ -165,6 +195,24 @@ export interface CanvasEdgeFileData {
 export interface CanvasView extends ItemView {
 	canvas: Canvas;
 	file: { path: string };
+	scope: {
+		keys: CanvasKeymapEntry[];
+		parent?: {
+			handleKey: (event: KeyboardEvent, context?: unknown) => unknown;
+		};
+		register: (
+			modifiers: string[],
+			key: string,
+			func: (event: KeyboardEvent, context?: unknown) => unknown
+		) => CanvasKeymapEntry;
+		unregister: (entry: CanvasKeymapEntry) => void;
+	};
+}
+
+export interface CanvasKeymapEntry {
+	key: string | null;
+	modifiers: string | null;
+	func: (event: KeyboardEvent, context?: unknown) => unknown;
 }
 
 /** Minimal CodeMirror 6 EditorView interface for text extraction. */

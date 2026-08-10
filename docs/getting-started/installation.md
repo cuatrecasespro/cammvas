@@ -1,5 +1,5 @@
 ---
-description: Install Mindvas from the Obsidian community plugins store.
+description: Install Cammvas from the Obsidian community plugins store.
 ---
 
 # Installation
@@ -12,18 +12,18 @@ Go to **Settings** > **Community plugins** > **Browse**.
 {% endstep %}
 
 {% step %}
-### Search for Mindvas
+### Search for Cammvas
 
-Type "Mindvas" in the search bar and click **Install**.
+Type "Cammvas" in the search bar and click **Install**.
 {% endstep %}
 
 {% step %}
 ### Enable the plugin
 
-Toggle Mindvas on in the **Installed plugins** list.
+Toggle Cammvas on in the **Installed plugins** list.
 {% endstep %}
 {% endstepper %}
 
 {% hint style="info" %}
-Mindvas requires Obsidian v1.0.0 or later.
+Cammvas requires Obsidian v1.13.4 or later.
 {% endhint %}
