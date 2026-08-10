@@ -1,7 +1,11 @@
 import { Platform } from "obsidian";
 import type { Canvas, CanvasDragHandler, CanvasNode } from "../types/canvas-internal";
 import { CanvasAPI } from "./canvas-api";
-import { collectDescendantIds, findDropTarget } from "./drag-reparent-state";
+import {
+	collectDescendantIdsForRoots,
+	findDropTarget,
+	getTopLevelSelectedIds,
+} from "./drag-reparent-state";
 import { getGroupIds } from "../mindmap/tree-model";
 
 const DROP_TARGET_CLASS = "cammvas-reparent-drop-target";
@@ -10,7 +14,7 @@ export function registerDragReparent(
 	canvas: Canvas,
 	canvasApi: CanvasAPI,
 	isEnabled: () => boolean,
-	onReparent: (node: CanvasNode, newParent: CanvasNode) => void
+	onReparent: (nodes: CanvasNode[], newParent: CanvasNode) => void
 ): () => void {
 	const original = canvas.handleSelectionDrag;
 	if (!original) return () => {};
@@ -28,26 +32,39 @@ export function registerDragReparent(
 		dragEl: HTMLElement,
 		directNode?: CanvasNode
 	): CanvasDragHandler | void {
-		const selectedNode = canvasApi.getSelectedNode(canvas);
-		const draggedNode = directNode ?? selectedNode ?? undefined;
-		const directNodeHasSingleSelection = directNode
-			? !canvas.selection.has(directNode) || canvas.selection.size === 1
-			: canvas.selection.size === 1;
 		const groupIds = getGroupIds(canvas);
+		const selectedNodes = Array.from(canvas.selection)
+			.map((item) => canvas.nodes.get(item.id))
+			.filter((node): node is CanvasNode => !!node && !groupIds.has(node.id));
+		const candidateNodes = directNode && !canvas.selection.has(directNode)
+			? [directNode]
+			: selectedNodes.length > 0
+				? selectedNodes
+				: directNode
+					? [directNode]
+					: [];
+		const candidateIds = new Set(candidateNodes.map((node) => node.id));
+		const topLevelIds = getTopLevelSelectedIds(
+			candidateIds,
+			(nodeId) => {
+				const node = canvas.nodes.get(nodeId);
+				return node ? canvasApi.getParentNode(canvas, node)?.id ?? null : null;
+			}
+		);
+		const draggedNodes = candidateNodes.filter((node) => topLevelIds.has(node.id));
 		const eligible = isEnabled()
-			&& !!draggedNode
-			&& directNodeHasSingleSelection
-			&& !groupIds.has(draggedNode.id);
+			&& draggedNodes.length > 0
+			&& (!directNode || !groupIds.has(directNode.id));
 
 		const handler = original.call(this, event, dragEl, directNode);
-		if (!handler || !eligible || !draggedNode) return handler;
+		if (!handler || !eligible) return handler;
 
-		const descendantIds = collectDescendantIds(
-			draggedNode.id,
+		const descendantIds = collectDescendantIdsForRoots(
+			draggedNodes.map((node) => node.id),
 			(nodeId) => canvasApi.getOutgoingEdges(canvas, nodeId).map((edge) => edge.to.node.id)
 		);
 		const excludedIds = new Set(descendantIds);
-		excludedIds.add(draggedNode.id);
+		for (const node of draggedNodes) excludedIds.add(node.id);
 		for (const groupId of groupIds) excludedIds.add(groupId);
 
 		const targetAt = (pointerEvent: MouseEvent): CanvasNode | null =>
@@ -76,7 +93,7 @@ export function registerDragReparent(
 			clearHighlight();
 			const duplicating = Platform.isMacOS ? endEvent.altKey : endEvent.ctrlKey;
 			try {
-				if (target && isEnabled() && !duplicating) onReparent(draggedNode, target);
+				if (target && isEnabled() && !duplicating) onReparent(draggedNodes, target);
 			} finally {
 				originalEnd?.call(handler, endEvent);
 			}

@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Canvas, CanvasEdge, CanvasNode } from "../src/types/canvas-internal";
 import type { CanvasAPI } from "../src/canvas/canvas-api";
-import { collectDescendantIds, findDropTarget } from "../src/canvas/drag-reparent-state";
+import {
+	collectDescendantIds,
+	collectDescendantIdsForRoots,
+	findDropTarget,
+	getTopLevelSelectedIds,
+} from "../src/canvas/drag-reparent-state";
 import { NodeOperations } from "../src/mindmap/node-operations";
 
 function node(id: string, x = 0, y = 0, zIndex = 0): CanvasNode {
@@ -22,6 +27,44 @@ describe("drag reparent state", () => {
 
 		expect(collectDescendantIds("root", (id) => children.get(id) ?? []))
 			.toEqual(new Set(["child", "grandchild"]));
+	});
+
+	it("collects descendants across multiple dragged roots", () => {
+		const children = new Map([
+			["first", ["first-child"]],
+			["second", ["second-child"]],
+			["first-child", ["grandchild"]],
+		]);
+
+		expect(collectDescendantIdsForRoots(
+			["first", "second"],
+			(id) => children.get(id) ?? []
+		)).toEqual(new Set(["first-child", "second-child", "grandchild"]));
+	});
+
+	it("keeps independent selected nodes as separate roots", () => {
+		const parents = new Map<string, string | null>([
+			["first", "old-parent-a"],
+			["second", "old-parent-b"],
+		]);
+
+		expect(getTopLevelSelectedIds(
+			new Set(["first", "second"]),
+			(id) => parents.get(id) ?? null
+		)).toEqual(new Set(["first", "second"]));
+	});
+
+	it("does not flatten a selected descendant whose ancestor is also selected", () => {
+		const parents = new Map<string, string | null>([
+			["parent", "root"],
+			["child", "parent"],
+			["grandchild", "child"],
+		]);
+
+		expect(getTopLevelSelectedIds(
+			new Set(["parent", "child", "grandchild"]),
+			(id) => parents.get(id) ?? null
+		)).toEqual(new Set(["parent"]));
 	});
 
 	it("selects the topmost valid node under the pointer", () => {

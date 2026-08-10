@@ -157,10 +157,7 @@ export class KeyboardHandler {
 				if (checking) return true;
 
 				this.onBeforeLeaveNode?.();
-				const parent = this.nodeOps.deleteAndFocusParent(
-					canvas,
-					node
-				);
+				const parent = this.nodeOps.deleteAndFocusParent(canvas, node);
 				if (parent) {
 					if (this.autoLayoutEnabled()) this.layoutEngine.layoutChildren(canvas, parent.id);
 					if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {

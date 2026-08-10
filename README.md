@@ -9,9 +9,10 @@ Cammvas adds the interactions people expect from standalone mind-mapping softwar
 ## What Cammvas Adds
 
 - **Mind-map keyboard workflow:** `Enter` creates a sibling, `Tab` creates a child, `Shift + Enter` inserts a line break, and arrow keys navigate the tree.
-- **Drag to create branches:** drop a node onto another node to reparent its complete subtree, with cycle prevention and a highlighted target.
+- **Drag to create branches:** drop one or multiple selected nodes onto another node to reparent their complete branches, with cycle prevention and a highlighted target.
 - **Collapsible branches:** fold and restore complete descendant trees directly from their parent nodes.
 - **Automatic tree layout:** compact contour-based placement with left, right, and balanced branches.
+- **Branch-only re-layout:** manually organize only the descendants of the selected node without moving its ancestors.
 - **Branch-aware dragging:** moving a node moves its descendants while preserving their relative positions.
 - **Map outline:** search, navigate, group, rename, and reorganize roots from a synchronized sidebar.
 - **Branch colors:** configurable palettes with automatic propagation through each branch.
@@ -24,6 +25,8 @@ Cammvas adds the interactions people expect from standalone mind-mapping softwar
 3. Enable **Mind mapping Enter and Tab** for the conventional `Enter`/`Tab` workflow.
 4. Enable **Drag to reparent** to restructure branches by dropping nodes onto other nodes.
 5. Use the node chevrons to collapse or expand branches.
+
+The Canvas controls also include toggles for **Drag to reparent** and **Mind mapping Enter and Tab**. Right-click a parent node to re-layout only that branch.
 
 All behavior can be configured under **Settings > Cammvas**.
 

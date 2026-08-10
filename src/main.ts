@@ -42,6 +42,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private interceptedCanvas: Canvas | null = null;
 	private toggleBtnEl: HTMLElement | null = null;
 	private dragReparentBtnEl: HTMLElement | null = null;
+	private enterTabBtnEl: HTMLElement | null = null;
 	private cleanupGroupBoundsHandler: (() => void) | null = null;
 	private cleanupSelectionSyncHandler: (() => void) | null = null;
 	private cleanupInsertNodeHandler: (() => void) | null = null;
@@ -118,6 +119,19 @@ export default class CanvasMindMapPlugin extends Plugin {
 				if (checking) return true;
 				this.layoutEngine.layout(canvas);
 				this.updateGroupBounds(canvas);
+			},
+		});
+
+		this.addCommand({
+			id: "mindmap-relayout-selected-branch",
+			name: "Re-layout selected branch",
+			checkCallback: (checking: boolean) => {
+				const canvas = this.canvasApi.getActiveCanvas();
+				if (!canvas || !this.isMindmapCanvas(canvas)) return false;
+				const node = this.canvasApi.getSelectedNode(canvas);
+				if (!node || this.canvasApi.getChildNodes(canvas, node).length === 0) return false;
+				if (checking) return true;
+				this.relayoutSelectedBranch(canvas);
 			},
 		});
 
@@ -296,7 +310,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		// Node referencing: "Copy node link" in canvas node context menu
 		this.registerEvent(
 			this.app.workspace.on("canvas:node-menu", (menu: Menu, node: CanvasNode) => {
-				const canvas = this.canvasApi.getActiveCanvas();
+				const canvas = node.canvas;
 
 				menu.addItem((item) => {
 					item.setTitle("Copy node link")
@@ -308,18 +322,27 @@ export default class CanvasMindMapPlugin extends Plugin {
 						});
 				});
 
-				if (canvas) {
-					const groupIds = getGroupIds(canvas);
-					if (groupIds.has(node.id)) {
-						menu.addItem((item) => {
-							item.setTitle("Layout forest")
-								.setIcon("layout-grid")
-								.onClick(() => {
-									this.layoutEngine.layoutForest(canvas, node.id);
-									this.updateGroupBounds(canvas);
-								});
-						});
-					}
+				const groupIds = getGroupIds(canvas);
+				if (groupIds.has(node.id)) {
+					menu.addItem((item) => {
+						item.setTitle("Layout forest")
+							.setIcon("layout-grid")
+							.onClick(() => {
+								this.layoutEngine.layoutForest(canvas, node.id);
+								this.updateGroupBounds(canvas);
+							});
+					});
+				} else if (
+					this.isMindmapCanvas(canvas)
+					&& this.canvasApi.getChildNodes(canvas, node).length > 0
+				) {
+					menu.addItem((item) => {
+						item.setTitle("Re-layout selected branch")
+							.setIcon("list-tree")
+							.onClick(() => {
+								this.relayoutSelectedBranch(canvas, node);
+							});
+					});
 				}
 			})
 		);
@@ -480,6 +503,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.dragReparentBtnEl.remove();
 			this.dragReparentBtnEl = null;
 		}
+		if (this.enterTabBtnEl) {
+			this.enterTabBtnEl.remove();
+			this.enterTabBtnEl = null;
+		}
 	}
 
 	/**
@@ -562,6 +589,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.dragReparentBtnEl.remove();
 				this.dragReparentBtnEl = null;
 			}
+			if (this.enterTabBtnEl) {
+				this.enterTabBtnEl.remove();
+				this.enterTabBtnEl = null;
+			}
 			this.hideOutline();
 			return;
 		}
@@ -588,8 +619,12 @@ export default class CanvasMindMapPlugin extends Plugin {
 			canvas,
 			this.canvasApi,
 			() => this.settings.dragToReparent && this.isMindmapCanvas(canvas),
-			(node, newParent) => {
-				if (!this.nodeOps.reparent(canvas, node, newParent)) return;
+			(nodes, newParent) => {
+				let changed = false;
+				for (const node of nodes) {
+					changed = this.nodeOps.reparent(canvas, node, newParent) || changed;
+				}
+				if (!changed) return;
 				if (this.settings.autoLayout) this.layoutEngine.layout(canvas);
 				if (this.settings.autoColor) this.branchColors.applyColors(canvas);
 				this.updateGroupBounds(canvas);
@@ -1234,6 +1269,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.dragReparentBtnEl.remove();
 			this.dragReparentBtnEl = null;
 		}
+		if (this.enterTabBtnEl) {
+			this.enterTabBtnEl.remove();
+			this.enterTabBtnEl = null;
+		}
 		const controls = canvas.view.containerEl.querySelector('.canvas-controls');
 		if (!controls) return;
 
@@ -1259,8 +1298,20 @@ export default class CanvasMindMapPlugin extends Plugin {
 		btn.after(dragBtn);
 		this.dragReparentBtnEl = dragBtn;
 
+		const enterTabBtn = document.createElement('div');
+		enterTabBtn.addClass('cammvas-toggle-btn', 'cammvas-enter-tab-btn', 'clickable-icon');
+		this.registerDomEvent(enterTabBtn, 'click', (e) => {
+			e.stopPropagation();
+			this.settings.enterCreatesSibling = !this.settings.enterCreatesSibling;
+			this.updateEnterTabButton();
+			void this.saveSettings();
+		});
+		dragBtn.after(enterTabBtn);
+		this.enterTabBtnEl = enterTabBtn;
+
 		this.updateToggleButton(canvas);
 		this.updateDragReparentButton();
+		this.updateEnterTabButton();
 	}
 
 	private updateToggleButton(canvas: Canvas): void {
@@ -1283,6 +1334,40 @@ export default class CanvasMindMapPlugin extends Plugin {
 			'aria-label',
 			isActive ? 'Drag to reparent (active)' : 'Drag to reparent (inactive)'
 		);
+	}
+
+	private updateEnterTabButton(): void {
+		if (!this.enterTabBtnEl) return;
+		const isActive = this.settings.enterCreatesSibling;
+		this.enterTabBtnEl.empty();
+		setIcon(this.enterTabBtnEl, 'keyboard');
+		this.enterTabBtnEl.toggleClass('is-active', isActive);
+		this.enterTabBtnEl.setAttribute(
+			'aria-label',
+			isActive ? 'Mind mapping Enter and Tab (active)' : 'Mind mapping Enter and Tab (inactive)'
+		);
+	}
+
+	private relayoutSelectedBranch(canvas: Canvas, branchParent?: CanvasNode): void {
+		if (!this.isMindmapCanvas(canvas)) {
+			new Notice("Enable mindmap mode before re-layout");
+			return;
+		}
+		const node = branchParent ?? this.canvasApi.getSelectedNode(canvas);
+		if (!node) {
+			new Notice("Select a branch parent before re-layout");
+			return;
+		}
+		if (this.canvasApi.getChildNodes(canvas, node).length === 0) {
+			new Notice("The selected node has no child branch to re-layout");
+			return;
+		}
+
+		// Finalize live sizing without triggering the normal root-level edit-exit layout.
+		this.autoResizeHandle?.finalizeNode();
+		this.layoutEngine.layoutChildren(canvas, node.id);
+		this.updateGroupBounds(canvas);
+		this.branchCollapseHandle?.refresh();
 	}
 
 	/** Schedule a setTimeout that is automatically cancelled on unload/canvas switch. */
@@ -1374,6 +1459,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.keyboardHandler.zoomPadding = this.settings.navigationZoomPadding;
 		}
 		this.updateDragReparentButton();
+		this.updateEnterTabButton();
 
 		const canvas = this.canvasApi.getActiveCanvas();
 		if (canvas && this.settings.autoColor && this.isMindmapCanvas(canvas)) {

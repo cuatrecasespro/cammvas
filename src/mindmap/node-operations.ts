@@ -148,40 +148,22 @@ export class NodeOperations {
 		return true;
 	}
 
-	/**
-	 * Delete the current node and return cursor focus to parent.
-	 * Children of the deleted node get reconnected to the parent
-	 * with edge sides matching their branch direction.
-	 * Returns the parent node (for focusing).
-	 */
-	deleteAndFocusParent(
-		canvas: Canvas,
-		currentNode: CanvasNode
-	): CanvasNode | null {
+	/** Delete a non-root node, reconnect its children, and return its parent. */
+	deleteAndFocusParent(canvas: Canvas, currentNode: CanvasNode): CanvasNode | null {
 		const parent = this.canvasApi.getParentNode(canvas, currentNode);
-		if (!parent) {
-			// Don't delete root node
-			return null;
-		}
+		if (!parent) return null;
 
 		const direction = this.detectDirection(canvas, currentNode);
-
-		// Get children of the node being deleted
-		const orphans = this.canvasApi.getChildNodes(canvas, currentNode);
-
-		// Reconnect orphaned children to the parent with correct edge sides
-		for (const orphan of orphans) {
+		for (const child of this.canvasApi.getChildNodes(canvas, currentNode)) {
 			if (direction === "right") {
-				this.canvasApi.createEdge(canvas, parent, orphan, "right", "left");
+				this.canvasApi.createEdge(canvas, parent, child, "right", "left");
 			} else {
-				this.canvasApi.createEdge(canvas, parent, orphan, "left", "right");
+				this.canvasApi.createEdge(canvas, parent, child, "left", "right");
 			}
 		}
 
-		// Remove the node (and its edges)
 		this.canvasApi.removeNode(canvas, currentNode);
 		canvas.requestSave();
-
 		return parent;
 	}
 

@@ -30,6 +30,7 @@ All commands are available from the command palette (`Ctrl/Cmd+P`). Search for "
 | Command                   | Description                                                |
 | ------------------------- | ---------------------------------------------------------- |
 | Re-layout mind map        | Recalculate layout for all trees on the canvas             |
+| Re-layout selected branch | Arrange only descendants of the selected node              |
 | Layout forest             | Arrange trees within the selected group into a grid        |
 | Flip branch to other side | Move a branch to the opposite side of its parent           |
 | Toggle balanced layout    | Distribute children on both sides, or collapse to one side |

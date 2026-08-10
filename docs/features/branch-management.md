@@ -18,6 +18,8 @@ To manually trigger coloring, run **Apply branch colors** from the command palet
 
 Enable **Drag to reparent** in Cammvas settings or with the branch button directly below **Mindmap mode** in the Canvas sidebar. Then drag a node onto another node to make it a child of that target. The target is highlighted before the drop, and the dragged node keeps its complete descendant branch. Dropping onto the same node or one of its descendants is blocked to prevent cycles.
 
+Multiple selected nodes can be dragged onto the same target in one operation. Each independent selected branch becomes a direct child of the target. If both an ancestor and one of its descendants are selected, Cammvas preserves their existing hierarchy instead of flattening the descendant.
+
 When **Auto-layout** is enabled, the map is rearranged after the drop. Dropping outside another node keeps the normal Canvas drag behavior.
 
 ## Flip branch
@@ -45,3 +47,5 @@ Spatial navigation (up/down) is side-aware in balanced layouts — it navigates 
 When **Auto-layout** is enabled, the tree structure recalculates after every operation (add, delete, flip, drag). The contour-based algorithm packs sibling subtrees as tightly as possible — a shallow subtree tucks under a deep neighbor to save vertical space.
 
 To manually trigger a full re-layout, run **Re-layout mind map** from the command palette.
+
+Use **Re-layout selected branch** from the command palette or a parent node's context menu to arrange only descendants of that node. The branch parent and all earlier ancestors remain fixed.

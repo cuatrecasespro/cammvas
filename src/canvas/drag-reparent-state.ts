@@ -11,9 +11,16 @@ export function collectDescendantIds(
 	rootId: string,
 	getChildIds: (nodeId: string) => Iterable<string>
 ): Set<string> {
+	return collectDescendantIdsForRoots([rootId], getChildIds);
+}
+
+export function collectDescendantIdsForRoots(
+	rootIds: Iterable<string>,
+	getChildIds: (nodeId: string) => Iterable<string>
+): Set<string> {
 	const descendants = new Set<string>();
-	const visited = new Set<string>([rootId]);
-	const queue = [rootId];
+	const queue = Array.from(rootIds);
+	const visited = new Set(queue);
 
 	while (queue.length > 0) {
 		const nodeId = queue.shift()!;
@@ -49,4 +56,28 @@ export function findDropTarget<T extends DropTargetNode>(
 	}
 
 	return best;
+}
+
+export function getTopLevelSelectedIds(
+	selectedIds: ReadonlySet<string>,
+	getParentId: (nodeId: string) => string | null
+): Set<string> {
+	const roots = new Set<string>();
+
+	for (const nodeId of selectedIds) {
+		let parentId = getParentId(nodeId);
+		const visited = new Set<string>([nodeId]);
+		let nested = false;
+		while (parentId && !visited.has(parentId)) {
+			if (selectedIds.has(parentId)) {
+				nested = true;
+				break;
+			}
+			visited.add(parentId);
+			parentId = getParentId(parentId);
+		}
+		if (!nested) roots.add(nodeId);
+	}
+
+	return roots;
 }
