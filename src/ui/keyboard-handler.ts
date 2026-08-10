@@ -80,11 +80,10 @@ export class KeyboardHandler {
 			},
 		});
 
-		// Shift+Tab → Create child node
+		// Create child node
 		this.plugin.addCommand({
 			id: "mindmap-add-child",
 			name: "Add child node",
-			hotkeys: [{ modifiers: ["Shift"], key: "Tab" }],
 			checkCallback: (checking: boolean) => {
 				const canvas = this.canvasApi.getActiveCanvas();
 				if (!canvas) return false;
@@ -112,11 +111,10 @@ export class KeyboardHandler {
 			},
 		});
 
-		// Shift+º → Create sibling node
+		// Create sibling node
 		this.plugin.addCommand({
 			id: "mindmap-add-sibling",
 			name: "Add sibling node",
-			hotkeys: [{ modifiers: ["Shift"], key: "º" }],
 			checkCallback: (checking: boolean) => {
 				const canvas = this.canvasApi.getActiveCanvas();
 				if (!canvas) return false;

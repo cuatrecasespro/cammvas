@@ -55,9 +55,6 @@ All commands are available from the command palette (`Ctrl/Cmd+P`). Search for "
 | Command                      | Hotkey                     |
 | ---------------------------- | -------------------------- |
 | Edit selected node           | `Enter`                    |
-| Add child node               | `Shift + Tab` (default)    |
-| Add sibling node             | `Shift + º` (default)      |
-| Create root node             | `Shift + Enter` (default)  |
 | Delete node and focus parent | `Ctrl + Shift + Backspace` |
 | Flip branch                  | `Ctrl + Shift + S`         |
 | Toggle balanced layout       | `Ctrl + Shift + D`         |
@@ -68,4 +65,4 @@ All commands are available from the command palette (`Ctrl/Cmd+P`). Search for "
 Cammvas includes a physical-key fallback for non-Latin keyboard layouts. See [Working with RTL content](/broken/pages/T0FxqT2PDsBShPB5TUm4).
 {% endhint %}
 
-When **Mind mapping Enter and Tab** is enabled, plain `Enter` creates a sibling while editing, `Tab` creates a child from the selected node, and `Shift + Enter` inserts a line break. The create-root hotkey is ignored while a node is being edited.
+When **Mind mapping Enter and Tab** is enabled, plain `Enter` creates a sibling while editing, `Tab` creates a child from the selected node, and `Shift + Enter` inserts a line break. Double-click empty Canvas space to create a root. Node creation commands have no default hotkeys but can be customized under **Settings > Hotkeys**.

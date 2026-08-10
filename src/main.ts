@@ -125,7 +125,6 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.addCommand({
 			id: "mindmap-create-root",
 			name: "Create root node",
-			hotkeys: [{ modifiers: ["Shift"], key: "Enter" }],
 			checkCallback: (checking: boolean) => {
 				const canvas = this.canvasApi.getActiveCanvas();
 				if (!canvas || !this.isMindmapCanvas(canvas)) return false;

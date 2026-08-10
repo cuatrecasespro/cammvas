@@ -20,23 +20,18 @@ Cammvas adds the interactions people expect from standalone mind-mapping softwar
 ## Quick Start
 
 1. Open a Canvas and activate **Mindmap mode** from the Canvas controls.
-2. Select a node and use `Shift + Tab` to create a child or the command palette to create a root.
+2. Double-click empty Canvas space to create a root node.
 3. Enable **Mind mapping Enter and Tab** for the conventional `Enter`/`Tab` workflow.
 4. Enable **Drag to reparent** to restructure branches by dropping nodes onto other nodes.
 5. Use the node chevrons to collapse or expand branches.
 
 All behavior can be configured under **Settings > Cammvas**.
 
-## Default Hotkeys
+## Keyboard Workflow
 
-| Action | Hotkey |
-| --- | --- |
-| Add child node | `Shift + Tab` |
-| Add sibling node | `Shift + º` |
-| Create root node | `Shift + Enter` |
-| Navigate between nodes | Arrow keys |
+When **Mind mapping Enter and Tab** is enabled, plain `Enter` creates a sibling while editing, plain `Tab` creates a child, `Shift + Enter` inserts a line break, and arrow keys navigate between nodes.
 
-When **Mind mapping Enter and Tab** is enabled, plain `Enter` creates a sibling while editing and plain `Tab` creates a child. `Shift + Enter` remains available for line breaks while editing.
+Cammvas does not assign default hotkeys to **Add child node**, **Add sibling node**, or **Create root node**. All commands remain available from the command palette and can be assigned custom hotkeys under **Settings > Hotkeys**.
 
 ## Installation
 
