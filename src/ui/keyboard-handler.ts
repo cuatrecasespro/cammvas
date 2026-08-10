@@ -386,17 +386,17 @@ export class KeyboardHandler {
 
 	registerArrowKeyNavigation(canvas: Canvas): void {
 		this.unregisterArrowKeyNavigation();
-		const commandIds: Record<string, string> = {
-			ArrowRight: "cammvas:mindmap-nav-right",
-			ArrowLeft: "cammvas:mindmap-nav-left",
-			ArrowDown: "cammvas:mindmap-nav-next-sibling",
-			ArrowUp: "cammvas:mindmap-nav-prev-sibling",
-		};
+		const commandIds: ReadonlyArray<readonly [string, string]> = [
+			["ArrowRight", "cammvas:mindmap-nav-right"],
+			["ArrowLeft", "cammvas:mindmap-nav-left"],
+			["ArrowDown", "cammvas:mindmap-nav-next-sibling"],
+			["ArrowUp", "cammvas:mindmap-nav-prev-sibling"],
+		];
 
 		const entries = canvas.view.scope?.keys;
 		if (!entries) return;
 
-		for (const [key, commandId] of Object.entries(commandIds)) {
+		for (const [key, commandId] of commandIds) {
 			const entry = entries.find(
 				(candidate) => candidate.key === key && candidate.modifiers === ""
 			);
