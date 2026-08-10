@@ -59,6 +59,10 @@ Once Cammvas is accepted into the Obsidian community directory:
 
 Cammvas currently requires Obsidian 1.13.4 or newer and is desktop-only. Several advanced Canvas interactions depend on undocumented runtime APIs, so compatibility is tested against current Obsidian releases.
 
+## Privacy And Permissions
+
+Cammvas runs locally, makes no network requests, and collects no telemetry. It writes Canvas changes through Obsidian's vault API. Clipboard access occurs only after an explicit **Copy node link** action and writes the generated `obsidian://cammvas-navigate` link to the clipboard; Cammvas never reads clipboard contents.
+
 ## Origin And Attribution
 
 Cammvas is an independent Obsidian plugin developed by [cuatrecasespro](https://github.com/cuatrecasespro). It is based on the MIT-licensed [Mindvas](https://github.com/mobench/mindvas) project by mobench and retains its original copyright and license notice.
