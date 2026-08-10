@@ -465,7 +465,7 @@ export class LayoutEngine {
 
 		// Remove animation class after transition completes
 		if (this.config.animate) {
-			setTimeout(() => {
+			canvas.wrapperEl.win.setTimeout(() => {
 				for (const node of canvas.nodes.values()) {
 					node.nodeEl?.removeClass("mindmap-animating");
 				}

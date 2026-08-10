@@ -228,8 +228,3 @@ export interface CMEditorView {
 export interface CMContentElement extends HTMLElement {
 	cmView?: { view: CMEditorView };
 }
-
-/** Obsidian's undocumented App.commands API for programmatic command execution. */
-export interface ObsidianCommands {
-	executeCommandById: (id: string) => boolean;
-}

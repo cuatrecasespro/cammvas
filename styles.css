@@ -87,8 +87,8 @@
 	opacity: 1;
 }
 
-.cammvas-canvas-branch-hidden {
-	display: none !important;
+.canvas-wrapper .cammvas-canvas-branch-hidden {
+	display: none;
 }
 
 .canvas-node.cammvas-reparent-drop-target {
@@ -97,8 +97,8 @@
 	box-shadow: 0 0 0 6px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
 }
 
-.cammvas-outline.is-searching .tree-item-children {
-	display: block !important;
+.cammvas-outline.cammvas-outline.is-searching .tree-item .tree-item-children {
+	display: block;
 }
 
 .cammvas-outline .cammvas-outline-item .tree-item-inner {
@@ -162,7 +162,7 @@
 }
 
 /* Separator between ungrouped roots and groups */
-.cammvas-outline-ungrouped-zone:not(:empty):has(~ .tree-item) {
+.cammvas-outline-ungrouped-zone.has-group-separator {
 	padding-bottom: 4px;
 	margin-bottom: 4px;
 	border-bottom: 1px solid var(--background-modifier-border);

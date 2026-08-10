@@ -1,4 +1,5 @@
 import type { Canvas, CanvasNode } from "../types/canvas-internal";
+import { isHtmlElement } from "./dom";
 import { CanvasAPI } from "../canvas/canvas-api";
 import { buildForest, findTreeForNode, getDescendants } from "../mindmap/tree-model";
 
@@ -73,9 +74,10 @@ export class Navigation {
 		const handler = (e: MouseEvent) => {
 			if (!e.ctrlKey && !e.metaKey && !e.altKey) return;
 
-			const target = e.target as HTMLElement;
+			const target = e.target;
+			if (!isHtmlElement(target)) return;
 			if (target.closest(".canvas-node-connection-point")) return;
-			const nodeEl = target.closest(".canvas-node") as HTMLElement;
+			const nodeEl = target.closest<HTMLElement>(".canvas-node");
 			if (!nodeEl) return;
 
 			for (const node of canvas.nodes.values()) {

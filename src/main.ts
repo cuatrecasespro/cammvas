@@ -11,6 +11,7 @@ import {
 	MindMapSettings,
 	DEFAULT_SETTINGS,
 	MindMapSettingTab,
+	normalizeSettings,
 } from "./settings";
 import { registerDragEndHandler } from "./canvas/edge-updater";
 import { registerSubtreeDragHandler } from "./canvas/subtree-drag";
@@ -19,6 +20,7 @@ import { registerGroupDragHandler } from "./canvas/group-drag";
 import { registerBranchCollapse, BranchCollapseHandle } from "./canvas/branch-collapse";
 import { registerAutoResize, AutoResizeHandle, getEditorElements } from "./ui/auto-resize";
 import { OutlineView, OUTLINE_VIEW_TYPE } from "./ui/outline-view";
+import { isHtmlElement } from "./ui/dom";
 import { freemindToCanvas } from "./import/freemind-import";
 import { getGroupIds, buildForest, findTreeForNode } from "./mindmap/tree-model";
 
@@ -47,8 +49,8 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private cleanupSelectionSyncHandler: (() => void) | null = null;
 	private cleanupInsertNodeHandler: (() => void) | null = null;
 	/** Pending timers/observers/RAFs to cancel on unload or canvas switch. */
-	private pendingTimers: Set<ReturnType<typeof setTimeout>> = new Set();
-	private pendingRafs: Set<number> = new Set();
+	private pendingTimers = new Set<{ id: number; win: Window }>();
+	private pendingRafs = new Set<{ id: number; win: Window }>();
 	private pendingObservers: Set<MutationObserver> = new Set();
 	/** Original canvas methods for unwrapping on cleanup. */
 	private origCanvasMethods: {
@@ -358,7 +360,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				if (file && file instanceof TFile) {
 					const leaf = this.app.workspace.getLeaf();
 					await leaf.openFile(file);
-					await new Promise(resolve => setTimeout(resolve, 200));
+					await new Promise(resolve => leaf.view.containerEl.win.setTimeout(resolve, 200));
 				}
 			}
 
@@ -640,14 +642,14 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.branchCollapseHandle = registerBranchCollapse(canvas, this.canvasApi);
 
 		// Update group bounds after any drag operation (deferred to let positions settle)
-		const onDragEnd = () => this.trackedRaf(() => this.updateGroupBounds(canvas));
+		const onDragEnd = () => this.trackedRaf(canvas.wrapperEl.win, () => this.updateGroupBounds(canvas));
 		canvas.wrapperEl.addEventListener('pointerup', onDragEnd);
 		this.cleanupGroupBoundsHandler = () =>
 			canvas.wrapperEl.removeEventListener('pointerup', onDragEnd);
 
 		// Sync outline highlight when canvas selection changes (click or Escape)
 		const syncOutlineSelection = () => {
-			this.trackedRaf(() => {
+			this.trackedRaf(canvas.wrapperEl.win, () => {
 				for (const leaf of this.app.workspace.getLeavesOfType(OUTLINE_VIEW_TYPE)) {
 					if (leaf.view instanceof OutlineView) {
 						leaf.view.syncHighlightFromCanvas(canvas);
@@ -671,7 +673,8 @@ export default class CanvasMindMapPlugin extends Plugin {
 		const onInsertNodeClick = (e: MouseEvent) => {
 			if (!e.altKey) return;
 
-			const target = e.target as HTMLElement;
+			const target = e.target;
+			if (!isHtmlElement(target)) return;
 			const connectionPoint = target.closest(".canvas-node-connection-point");
 			if (!connectionPoint) return;
 
@@ -966,7 +969,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (changed) {
 			canvas.requestSave();
 			// Remove animation class after transition completes
-			this.trackedTimeout(() => {
+			this.trackedTimeout(canvas.wrapperEl.win, () => {
 				for (const groupId of groupIds) {
 					const group = canvas.nodes.get(groupId);
 					group?.nodeEl?.removeClass('mindmap-group-animating');
@@ -985,17 +988,18 @@ export default class CanvasMindMapPlugin extends Plugin {
 			callback();
 			return;
 		}
-		const observer = new MutationObserver(() => {
+		const Observer = Reflect.get(node.contentEl.win, "MutationObserver") as typeof MutationObserver;
+		const observer = new Observer(() => {
 			const s = node.contentEl?.querySelector(".markdown-preview-sizer");
 			if (s && !node.isEditing) {
 				observer.disconnect();
 				this.pendingObservers.delete(observer);
-				this.trackedRaf(() => callback());
+				this.trackedRaf(node.contentEl.win, () => callback());
 			}
 		});
 		this.pendingObservers.add(observer);
 		observer.observe(node.contentEl, { childList: true, subtree: true });
-		this.trackedTimeout(() => {
+		this.trackedTimeout(node.contentEl.win, () => {
 			observer.disconnect();
 			this.pendingObservers.delete(observer);
 		}, 500);
@@ -1037,7 +1041,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				if (cmContent && scroller) {
 					contentH = 0;
 					for (const child of Array.from(cmContent.children)) {
-						contentH += (child as HTMLElement).offsetHeight;
+						if (isHtmlElement(child)) contentH += child.offsetHeight;
 					}
 					targetH = Math.min(Math.max(Math.ceil(contentH * SCALE) + BORDER, minH), maxH);
 					if (targetH !== node.height || targetW !== node.width) {
@@ -1062,7 +1066,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 
 			contentH = 0;
 			for (const child of Array.from(sizer.children)) {
-				contentH += (child as HTMLElement).offsetHeight;
+				if (isHtmlElement(child)) contentH += child.offsetHeight;
 			}
 
 			// If we measured 0 but the node has text, the DOM isn't rendered yet
@@ -1087,7 +1091,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 
 		// Retry unmeasurable nodes after a delay to let Obsidian render them
 		if (unmeasurable.length > 0) {
-			this.trackedTimeout(() => this.resizeNodesRetry(canvas, unmeasurable, minH, maxH, BORDER, SCALE), 200);
+			this.trackedTimeout(canvas.wrapperEl.win, () => this.resizeNodesRetry(canvas, unmeasurable, minH, maxH, BORDER, SCALE), 200);
 		}
 	}
 
@@ -1107,7 +1111,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 
 			let contentH = 0;
 			for (const child of Array.from(sizer.children)) {
-				contentH += (child as HTMLElement).offsetHeight;
+				if (isHtmlElement(child)) contentH += child.offsetHeight;
 			}
 			if (contentH === 0) continue;
 
@@ -1176,7 +1180,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	 */
 	private importFreeMindFile(folderPath?: string): void {
 		// Open native file picker for .mm files
-		const input = document.createElement("input");
+		const input = createEl("input");
 		input.type = "file";
 		input.accept = ".mm";
 		const handler = () => {
@@ -1276,7 +1280,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		const controls = canvas.view.containerEl.querySelector('.canvas-controls');
 		if (!controls) return;
 
-		const btn = document.createElement('div');
+		const btn = controls.createDiv();
 		btn.addClass('cammvas-toggle-btn', 'clickable-icon');
 		btn.setAttribute('aria-label', 'Toggle mindmap mode');
 		this.registerDomEvent(btn, 'click', (e) => {
@@ -1287,7 +1291,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		controls.prepend(btn);
 		this.toggleBtnEl = btn;
 
-		const dragBtn = document.createElement('div');
+		const dragBtn = controls.createDiv();
 		dragBtn.addClass('cammvas-toggle-btn', 'cammvas-drag-reparent-btn', 'clickable-icon');
 		this.registerDomEvent(dragBtn, 'click', (e) => {
 			e.stopPropagation();
@@ -1298,7 +1302,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		btn.after(dragBtn);
 		this.dragReparentBtnEl = dragBtn;
 
-		const enterTabBtn = document.createElement('div');
+		const enterTabBtn = controls.createDiv();
 		enterTabBtn.addClass('cammvas-toggle-btn', 'cammvas-enter-tab-btn', 'clickable-icon');
 		this.registerDomEvent(enterTabBtn, 'click', (e) => {
 			e.stopPropagation();
@@ -1371,28 +1375,30 @@ export default class CanvasMindMapPlugin extends Plugin {
 	}
 
 	/** Schedule a setTimeout that is automatically cancelled on unload/canvas switch. */
-	private trackedTimeout(callback: () => void, ms: number): void {
-		const id = setTimeout(() => {
-			this.pendingTimers.delete(id);
+	private trackedTimeout(win: Window, callback: () => void, ms: number): void {
+		const pending = { id: 0, win };
+		pending.id = win.setTimeout(() => {
+			this.pendingTimers.delete(pending);
 			callback();
 		}, ms);
-		this.pendingTimers.add(id);
+		this.pendingTimers.add(pending);
 	}
 
 	/** Schedule a requestAnimationFrame that is automatically cancelled on cleanup. */
-	private trackedRaf(callback: () => void): void {
-		const id = requestAnimationFrame(() => {
-			this.pendingRafs.delete(id);
+	private trackedRaf(win: Window, callback: () => void): void {
+		const pending = { id: 0, win };
+		pending.id = win.requestAnimationFrame(() => {
+			this.pendingRafs.delete(pending);
 			callback();
 		});
-		this.pendingRafs.add(id);
+		this.pendingRafs.add(pending);
 	}
 
 	/** Cancel all pending tracked timers, RAFs, and observers. */
 	private cancelPendingAsync(): void {
-		for (const id of this.pendingTimers) clearTimeout(id);
+		for (const pending of this.pendingTimers) pending.win.clearTimeout(pending.id);
 		this.pendingTimers.clear();
-		for (const id of this.pendingRafs) cancelAnimationFrame(id);
+		for (const pending of this.pendingRafs) pending.win.cancelAnimationFrame(pending.id);
 		this.pendingRafs.clear();
 		for (const obs of this.pendingObservers) obs.disconnect();
 		this.pendingObservers.clear();
@@ -1422,11 +1428,8 @@ export default class CanvasMindMapPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData()
-		);
+		const data: unknown = await this.loadData();
+		this.settings = normalizeSettings(data);
 	}
 
 	async saveSettings(): Promise<void> {
@@ -1470,7 +1473,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private createRootNode(): void {
 		const canvas = this.canvasApi?.getActiveCanvas();
 		if (!canvas) {
-			new Notice("Open a Canvas before creating a root node");
+			new Notice("Open a canvas before creating a root node");
 			return;
 		}
 		if (!this.isMindmapCanvas(canvas)) {

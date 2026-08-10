@@ -1,5 +1,5 @@
 import { Platform, Plugin } from "obsidian";
-import type { Canvas, CanvasNode, CMEditorView, CMContentElement, ObsidianCommands } from "../types/canvas-internal";
+import type { Canvas, CanvasNode, CMEditorView, CMContentElement } from "../types/canvas-internal";
 import { CanvasAPI } from "../canvas/canvas-api";
 import { NodeOperations } from "../mindmap/node-operations";
 import { LayoutEngine } from "../mindmap/layout-engine";
@@ -52,7 +52,7 @@ export class KeyboardHandler {
 				const canvas = this.canvasApi.getActiveCanvas();
 				if (!canvas) return false;
 				// Don't consume Enter when focus is outside the canvas (e.g. outline rename)
-				const activeEl = document.activeElement;
+				const activeEl = canvas.wrapperEl.doc.activeElement;
 				if (activeEl && !canvas.wrapperEl.contains(activeEl)) return false;
 				const node = this.canvasApi.getSelectedNode(canvas);
 				if (!node) return false;
@@ -363,11 +363,11 @@ export class KeyboardHandler {
 			return false;
 		}
 
-		const { commands } = this.plugin.app as unknown as { commands: ObsidianCommands };
-		if (!commands?.executeCommandById) return false;
+		const executeCommand = this.getCommandExecutor();
+		if (!executeCommand) return false;
 		event.preventDefault();
 		event.stopImmediatePropagation();
-		commands.executeCommandById("cammvas:mindmap-add-sibling");
+		executeCommand("cammvas:mindmap-add-sibling");
 		return true;
 	}
 
@@ -376,11 +376,11 @@ export class KeyboardHandler {
 		if (!node || !this.isMindmapEnabled(canvas)) return false;
 		if (!shouldCreateChildOnTab(event, this.enterCreatesSiblingEnabled(), true)) return false;
 
-		const { commands } = this.plugin.app as unknown as { commands: ObsidianCommands };
-		if (!commands?.executeCommandById) return false;
+		const executeCommand = this.getCommandExecutor();
+		if (!executeCommand) return false;
 		event.preventDefault();
 		event.stopImmediatePropagation();
-		commands.executeCommandById("cammvas:mindmap-add-child");
+		executeCommand("cammvas:mindmap-add-child");
 		return true;
 	}
 
@@ -411,13 +411,13 @@ export class KeyboardHandler {
 					return original(event, context);
 				}
 
-				const { commands } = this.plugin.app as unknown as { commands: ObsidianCommands };
-				if (!commands?.executeCommandById) return original(event, context);
+				const executeCommand = this.getCommandExecutor();
+				if (!executeCommand) return original(event, context);
 				event.preventDefault();
 				this.arrowKeySelectionOnly = true;
 				this.arrowNavigationCanvas = canvas;
 				try {
-					commands.executeCommandById(commandId);
+					executeCommand(commandId);
 				} finally {
 					this.arrowKeySelectionOnly = false;
 					this.arrowNavigationCanvas = null;
@@ -518,7 +518,7 @@ export class KeyboardHandler {
 			{ code: "KeyR", key: "r", ctrl: true, shift: true, alt: true, cmdId: "cammvas:mindmap-resize-all" },
 		];
 
-		this.plugin.registerDomEvent(document, "keydown", (e: KeyboardEvent) => {
+		const keydownHandler = (e: KeyboardEvent): void => {
 			const canvas = this.canvasApi.getActiveCanvas();
 			if (!canvas) return;
 			const ctrlOrCmd = Platform.isMacOS ? e.metaKey : e.ctrlKey;
@@ -542,8 +542,8 @@ export class KeyboardHandler {
 				return;
 			}
 
-			const { commands } = this.plugin.app as unknown as { commands: ObsidianCommands };
-			if (!commands?.executeCommandById) return;
+			const executeCommand = this.getCommandExecutor();
+			if (!executeCommand) return;
 
 			for (const s of shortcuts) {
 				if (
@@ -558,11 +558,35 @@ export class KeyboardHandler {
 					// Non-Latin layout: Obsidian won't match, so we handle it
 					e.preventDefault();
 					e.stopPropagation();
-					commands.executeCommandById(s.cmdId);
+					executeCommand(s.cmdId);
 					return;
 				}
 			}
-		});
+		};
+		const registerDocument = (doc: Document): void => {
+			this.plugin.registerDomEvent(doc, "keydown", keydownHandler);
+		};
+		registerDocument(this.plugin.app.workspace.containerEl.doc);
+		this.plugin.registerEvent(this.plugin.app.workspace.on("window-open", (_workspace, win) => {
+			registerDocument(win.document);
+		}));
+	}
+
+	private getCommandExecutor(): ((id: string) => boolean) | null {
+		const app: unknown = this.plugin.app;
+		if (!this.hasCommandExecutor(app)) return null;
+		return (id: string) => Boolean(app.commands.executeCommandById(id));
+	}
+
+	private hasCommandExecutor(value: unknown): value is {
+		commands: { executeCommandById: (id: string) => unknown };
+	} {
+		if (typeof value !== "object" || value === null || !("commands" in value)) return false;
+		const commands: unknown = value.commands;
+		return typeof commands === "object"
+			&& commands !== null
+			&& "executeCommandById" in commands
+			&& typeof commands.executeCommandById === "function";
 	}
 
 	/**

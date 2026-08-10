@@ -18,10 +18,11 @@ export function registerBranchCollapse(
 	let disposed = false;
 	let refreshRaf: number | null = null;
 	let observer: MutationObserver;
+	const win = canvas.wrapperEl.win;
 
 	const scheduleRefresh = (): void => {
 		if (disposed || refreshRaf !== null) return;
-		refreshRaf = requestAnimationFrame(() => {
+		refreshRaf = win.requestAnimationFrame(() => {
 			refreshRaf = null;
 			refresh();
 		});
@@ -36,7 +37,7 @@ export function registerBranchCollapse(
 		canvas.setData(data);
 		canvas.requestSave();
 		scheduleRefresh();
-		setTimeout(scheduleRefresh, 50);
+		win.setTimeout(scheduleRefresh, 50);
 	};
 
 	const syncButton = (
@@ -46,7 +47,7 @@ export function registerBranchCollapse(
 	): void => {
 		let button = node.nodeEl.querySelector<HTMLElement>(`:scope > .${BUTTON_CLASS}`);
 		if (!button) {
-			button = document.createElement("button");
+			button = node.nodeEl.createEl("button");
 			button.className = `${BUTTON_CLASS} clickable-icon`;
 			button.setAttribute("type", "button");
 			button.addEventListener("pointerdown", (event) => {
@@ -123,7 +124,8 @@ export function registerBranchCollapse(
 		observer.observe(canvas.wrapperEl, { childList: true, subtree: true });
 	};
 
-	observer = new MutationObserver(scheduleRefresh);
+	const Observer = Reflect.get(win, "MutationObserver") as typeof MutationObserver;
+	observer = new Observer(scheduleRefresh);
 	observer.observe(canvas.wrapperEl, { childList: true, subtree: true });
 	refresh();
 
@@ -132,7 +134,7 @@ export function registerBranchCollapse(
 		cleanup: () => {
 			disposed = true;
 			observer.disconnect();
-			if (refreshRaf !== null) cancelAnimationFrame(refreshRaf);
+			if (refreshRaf !== null) win.cancelAnimationFrame(refreshRaf);
 			for (const node of canvas.nodes.values()) {
 				node.nodeEl.removeClass(COLLAPSED_HIDDEN_CLASS);
 				node.nodeEl.querySelector<HTMLElement>(`:scope > .${BUTTON_CLASS}`)?.remove();

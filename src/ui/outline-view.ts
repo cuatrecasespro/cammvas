@@ -221,6 +221,10 @@ export class OutlineView extends ItemView {
 		for (const root of ungrouped) {
 			this.renderRootItem(ungroupedZone, root, canvas, true);
 		}
+		ungroupedZone.toggleClass(
+			"has-group-separator",
+			ungrouped.length > 0 && groups.some((group) => group.roots.length > 0)
+		);
 
 		// Render each group with roots as a collapsible section
 		for (const group of groups) {
@@ -503,12 +507,14 @@ export class OutlineView extends ItemView {
 			this.clearActiveItem();
 			return;
 		}
-		const item = canvas.selection.values().next().value;
-		if (!item || !("nodeEl" in item)) {
+		let nodeId: string | null = null;
+		for (const item of canvas.selection) {
+			if ("nodeEl" in item) nodeId = item.id;
+		}
+		if (!nodeId) {
 			this.clearActiveItem();
 			return;
 		}
-		const nodeId = (item as CanvasNode).id;
 		if (this.allItemEls.has(nodeId)) {
 			this.setActiveItem(nodeId);
 		} else {
@@ -558,7 +564,7 @@ export class OutlineView extends ItemView {
 			this.app.workspace.setActiveLeaf(this.canvasLeaf, { focus: true });
 		}
 		canvas.selectOnly(group);
-		setTimeout(() => group.startEditing(), 50);
+		this.contentEl.win.setTimeout(() => group.startEditing(), 50);
 
 		this.clearSelection();
 	}
@@ -606,14 +612,14 @@ export class OutlineView extends ItemView {
 		});
 
 		// Delayed click to toggle collapse (avoids conflict with dblclick rename)
-		let clickTimer: ReturnType<typeof setTimeout> | null = null;
+		let clickTimer: number | null = null;
 		self.addEventListener("click", () => {
 			if (clickTimer !== null) {
-				clearTimeout(clickTimer);
+				this.contentEl.win.clearTimeout(clickTimer);
 				clickTimer = null;
 				return;
 			}
-			clickTimer = setTimeout(() => {
+			clickTimer = this.contentEl.win.setTimeout(() => {
 				clickTimer = null;
 				if (this.collapsedGroups.has(group.node.id)) {
 					this.collapsedGroups.delete(group.node.id);
@@ -628,7 +634,7 @@ export class OutlineView extends ItemView {
 		// Double-click to rename group
 		self.addEventListener("dblclick", () => {
 			if (clickTimer !== null) {
-				clearTimeout(clickTimer);
+				this.contentEl.win.clearTimeout(clickTimer);
 				clickTimer = null;
 			}
 			this.startGroupRename(labelSpan, group, canvas);
@@ -715,9 +721,9 @@ export class OutlineView extends ItemView {
 		labelSpan.contentEditable = "true";
 		labelSpan.focus();
 
-		const range = document.createRange();
+		const range = labelSpan.doc.createRange();
 		range.selectNodeContents(labelSpan);
-		const sel = window.getSelection();
+		const sel = labelSpan.win.getSelection();
 		sel?.removeAllRanges();
 		sel?.addRange(range);
 

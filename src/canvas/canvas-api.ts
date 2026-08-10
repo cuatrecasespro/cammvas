@@ -6,6 +6,7 @@ import type {
 	CanvasEdge,
 	NodeSide,
 } from "../types/canvas-internal";
+import { isHtmlElement } from "../ui/dom";
 
 interface EdgeIndex {
 	/** Edges pointing TO a node (node is target) */
@@ -27,8 +28,8 @@ export function genId(): string {
  * Find the CanvasNode whose nodeEl contains the event target.
  */
 export function findNodeFromEvent(canvas: Canvas, e: PointerEvent | MouseEvent): CanvasNode | null {
-	const target = e.target as HTMLElement;
-	if (!target) return null;
+	const target = e.target;
+	if (!isHtmlElement(target)) return null;
 	for (const node of canvas.nodes.values()) {
 		if (node.nodeEl?.contains(target)) return node;
 	}
@@ -127,10 +128,10 @@ export class CanvasAPI {
 		const selection = canvas.selection;
 		if (selection.size !== 1) return null;
 
-		const item = selection.values().next().value;
-		if (!item || !("nodeEl" in item)) return null;
-
-		return item as CanvasNode;
+		for (const item of selection) {
+			return "nodeEl" in item ? item : null;
+		}
+		return null;
 	}
 
 	/**
@@ -270,7 +271,7 @@ export class CanvasAPI {
 
 	selectAndEdit(canvas: Canvas, node: CanvasNode, zoomPadding: number = 0): void {
 		this.selectAndZoom(canvas, node, zoomPadding);
-		setTimeout(() => {
+		canvas.wrapperEl.win.setTimeout(() => {
 			node.startEditing();
 		}, 50);
 	}

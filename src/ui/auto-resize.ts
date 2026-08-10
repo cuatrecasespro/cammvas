@@ -1,4 +1,5 @@
 import type { Canvas, CanvasNode } from "../types/canvas-internal";
+import { isDomNode, isHtmlElement } from "./dom";
 
 interface AutoResizeConfig {
 	minHeight: number;
@@ -53,6 +54,7 @@ export function registerAutoResize(
 	let cachedCmContent: HTMLElement | null = null;
 	let cachedScroller: HTMLElement | null = null;
 	let cachedInputTarget: Document | HTMLElement | null = null;
+	const win = canvas.wrapperEl.win;
 
 	function onContentChange(): void {
 		if (!activeNode || !cachedScroller || !cachedCmContent) return;
@@ -83,19 +85,23 @@ export function registerAutoResize(
 		// Observe inside the iframe where actual editing happens
 		const observeTarget = cmContent ?? iframe?.contentDocument?.body;
 		if (observeTarget) {
-			observer = new MutationObserver(onContentChange);
-			observer.observe(observeTarget, {
+			const Observer = Reflect.get(observeTarget.win, "MutationObserver") as typeof MutationObserver;
+			const nextObserver = new Observer(onContentChange);
+			nextObserver.observe(observeTarget, {
 				childList: true,
 				subtree: true,
 				characterData: true,
 			});
+			observer = nextObserver;
 		} else {
-			observer = new MutationObserver(onContentChange);
-			observer.observe(node.contentEl, {
+			const Observer = Reflect.get(node.contentEl.win, "MutationObserver") as typeof MutationObserver;
+			const nextObserver = new Observer(onContentChange);
+			nextObserver.observe(node.contentEl, {
 				childList: true,
 				subtree: true,
 				characterData: true,
 			});
+			observer = nextObserver;
 		}
 
 		cachedInputTarget = iframe?.contentDocument ?? node.contentEl;
@@ -133,8 +139,9 @@ export function registerAutoResize(
 	}
 
 	const focusInHandler = (e: FocusEvent): void => {
-		const target = e.target as HTMLElement | null;
-		const nodeEl = target?.closest?.(".canvas-node") as HTMLElement | null;
+		const target = e.target;
+		if (!isHtmlElement(target)) return;
+		const nodeEl = target.closest<HTMLElement>(".canvas-node");
 		if (!nodeEl) return;
 
 		for (const node of canvas.nodes.values()) {
@@ -148,7 +155,7 @@ export function registerAutoResize(
 
 	const focusOutHandler = (): void => {
 		if (!activeNode) return;
-		setTimeout(() => {
+		win.setTimeout(() => {
 			if (activeNode && !activeNode.isEditing) {
 				stopWatching();
 			}
@@ -159,8 +166,8 @@ export function registerAutoResize(
 	const pointerHandler = (e: PointerEvent): void => {
 		if (!activeNode) return;
 		// Ignore clicks inside the editing node
-		if (activeNode.nodeEl?.contains(e.target as Node)) return;
-		setTimeout(() => {
+		if (isDomNode(e.target) && activeNode.nodeEl?.contains(e.target)) return;
+		win.setTimeout(() => {
 			if (activeNode && !activeNode.isEditing) {
 				stopWatching();
 			}
