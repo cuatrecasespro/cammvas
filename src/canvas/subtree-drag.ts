@@ -29,6 +29,9 @@ interface WrappedBranch {
 /** Make every selected top-level node move its unselected descendants during a drag. */
 export function registerSubtreeDragHandler(canvas: Canvas, canvasApi: CanvasAPI): () => void {
 	let wrappedBranches: WrappedBranch[] = [];
+	let activePointerId: number | null = null;
+	let didMove = false;
+	let cancelled = false;
 
 	const selectedNodes = (): CanvasNode[] =>
 		Array.from(canvas.selection)
@@ -39,6 +42,9 @@ export function registerSubtreeDragHandler(canvas: Canvas, canvasApi: CanvasAPI)
 			delete (root as { moveTo?: unknown }).moveTo;
 		}
 		wrappedBranches = [];
+		activePointerId = null;
+		didMove = false;
+		cancelled = false;
 	};
 
 	const installWrappers = (candidates: CanvasNode[]): void => {
@@ -67,6 +73,7 @@ export function registerSubtreeDragHandler(canvas: Canvas, canvasApi: CanvasAPI)
 			const branch: WrappedBranch = { root, descendants, originalMoveTo };
 			wrappedBranches.push(branch);
 			root.moveTo = (pos: { x: number; y: number }) => {
+				didMove = true;
 				const dx = pos.x - root.x;
 				const dy = pos.y - root.y;
 				originalMoveTo(pos);
@@ -82,11 +89,16 @@ export function registerSubtreeDragHandler(canvas: Canvas, canvasApi: CanvasAPI)
 	};
 
 	const downHandler = (event: PointerEvent): void => {
+		if (event.pointerType === "touch" && !event.isPrimary) {
+			cancelled = true;
+			return;
+		}
 		clearDragSession();
 		if (event.altKey) return;
 
 		const clickedNode = findNodeFromEvent(canvas, event);
 		if (!clickedNode) return;
+		activePointerId = event.pointerId;
 		const currentSelection = selectedNodes();
 		installWrappers(
 			canvas.selection.has(clickedNode) && currentSelection.length > 1
@@ -96,27 +108,40 @@ export function registerSubtreeDragHandler(canvas: Canvas, canvasApi: CanvasAPI)
 	};
 
 	const moveHandler = (event: PointerEvent): void => {
-		if (event.buttons === 0) return;
+		if (event.pointerType === "touch" && !event.isPrimary) {
+			cancelled = true;
+			return;
+		}
+		if (event.pointerId !== activePointerId) return;
+		if (event.pointerType !== "touch" && event.buttons === 0) return;
 		if (event.altKey) {
 			clearDragSession();
 			return;
 		}
 	};
 
-	const upHandler = (): void => {
-		if (wrappedBranches.length === 0) return;
-		canvas.requestSave();
+	const upHandler = (event: PointerEvent): void => {
+		if (event.pointerId !== activePointerId) return;
+		if (wrappedBranches.length > 0 && didMove && !cancelled) canvas.requestSave();
 		clearDragSession();
+	};
+
+	const cancelHandler = (event: PointerEvent): void => {
+		if (event.pointerId === activePointerId) clearDragSession();
 	};
 
 	canvas.wrapperEl?.addEventListener("pointerdown", downHandler, true);
 	canvas.wrapperEl?.addEventListener("pointermove", moveHandler);
 	canvas.wrapperEl?.addEventListener("pointerup", upHandler);
+	canvas.wrapperEl?.addEventListener("pointercancel", cancelHandler);
+	canvas.wrapperEl?.addEventListener("lostpointercapture", cancelHandler);
 
 	return () => {
 		clearDragSession();
 		canvas.wrapperEl?.removeEventListener("pointerdown", downHandler, true);
 		canvas.wrapperEl?.removeEventListener("pointermove", moveHandler);
 		canvas.wrapperEl?.removeEventListener("pointerup", upHandler);
+		canvas.wrapperEl?.removeEventListener("pointercancel", cancelHandler);
+		canvas.wrapperEl?.removeEventListener("lostpointercapture", cancelHandler);
 	};
 }

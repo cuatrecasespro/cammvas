@@ -6,6 +6,7 @@ import {
 	collectDescendantIdsForRoots,
 	findDropTarget,
 	getTopLevelSelectedIds,
+	shouldReparentOnDragEnd,
 } from "../src/canvas/drag-reparent-state";
 import { NodeOperations } from "../src/mindmap/node-operations";
 
@@ -78,6 +79,19 @@ describe("drag reparent state", () => {
 
 	it("returns null outside all valid nodes", () => {
 		expect(findDropTarget([node("target")], { x: 200, y: 200 }, new Set())).toBeNull();
+	});
+
+	it("uses optional hit padding without changing exact-hit behavior by default", () => {
+		const target = node("target");
+
+		expect(findDropTarget([target], { x: 105, y: 25 }, new Set())).toBeNull();
+		expect(findDropTarget([target], { x: 105, y: 25 }, new Set(), 8)).toBe(target);
+	});
+
+	it("only reparents when a drag ends with pointerup", () => {
+		expect(shouldReparentOnDragEnd("pointerup")).toBe(true);
+		expect(shouldReparentOnDragEnd("pointercancel")).toBe(false);
+		expect(shouldReparentOnDragEnd("lostpointercapture")).toBe(false);
 	});
 });
 

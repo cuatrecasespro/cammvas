@@ -1,4 +1,4 @@
-import { Plugin, Notice, TFile, TFolder, Menu, debounce, WorkspaceLeaf, setIcon, ItemView } from "obsidian";
+import { Plugin, Notice, TFile, TFolder, Menu, Platform, debounce, WorkspaceLeaf, setIcon, ItemView } from "obsidian";
 import type { Canvas, CanvasNode, CanvasEdge, CreateNodeOptions } from "./types/canvas-internal";
 import { CanvasAPI } from "./canvas/canvas-api";
 import { NodeOperations } from "./mindmap/node-operations";
@@ -21,6 +21,7 @@ import { registerBranchCollapse, BranchCollapseHandle } from "./canvas/branch-co
 import { registerAutoResize, AutoResizeHandle, getEditorElements } from "./ui/auto-resize";
 import { OutlineView, OUTLINE_VIEW_TYPE } from "./ui/outline-view";
 import { isHtmlElement } from "./ui/dom";
+import { copyText } from "./ui/clipboard";
 import { freemindToCanvas } from "./import/freemind-import";
 import { getGroupIds, buildForest, findTreeForNode } from "./mindmap/tree-model";
 
@@ -45,6 +46,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private toggleBtnEl: HTMLElement | null = null;
 	private dragReparentBtnEl: HTMLElement | null = null;
 	private enterTabBtnEl: HTMLElement | null = null;
+	private mobileActionsBtnEl: HTMLElement | null = null;
 	private cleanupGroupBoundsHandler: (() => void) | null = null;
 	private cleanupSelectionSyncHandler: (() => void) | null = null;
 	private cleanupInsertNodeHandler: (() => void) | null = null;
@@ -319,10 +321,27 @@ export default class CanvasMindMapPlugin extends Plugin {
 						.setIcon("link")
 						.onClick(() => {
 							const canvasPath = node.canvas.view.file.path;
-							void navigator.clipboard.writeText(`obsidian://cammvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${node.id}`);
-							new Notice("Node link copied");
+							void copyText(
+								node.nodeEl.win,
+								`obsidian://cammvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${node.id}`,
+								"Node link copied"
+							);
 						});
 				});
+				if (Platform.isMobile && this.isMindmapCanvas(canvas)) {
+					menu.addItem((item) => item
+						.setTitle("Add child node")
+						.setIcon("corner-down-right")
+						.onClick(() => this.keyboardHandler.addChildNode(canvas, node)));
+					menu.addItem((item) => item
+						.setTitle("Add sibling node")
+						.setIcon("list-plus")
+						.onClick(() => this.keyboardHandler.addSiblingNode(canvas, node)));
+					menu.addItem((item) => item
+						.setTitle("Zoom to branch")
+						.setIcon("scan")
+						.onClick(() => this.navigation.zoomToBranch(canvas, node)));
+				}
 
 				const groupIds = getGroupIds(canvas);
 				if (groupIds.has(node.id)) {
@@ -355,16 +374,21 @@ export default class CanvasMindMapPlugin extends Plugin {
 			if (!nodeId) return;
 
 			const canvasPath = params.canvas;
+			let canvas: Canvas | null = null;
 			if (canvasPath) {
 				const file = this.app.vault.getAbstractFileByPath(canvasPath);
 				if (file && file instanceof TFile) {
 					const leaf = this.app.workspace.getLeaf();
 					await leaf.openFile(file);
-					await new Promise(resolve => leaf.view.containerEl.win.setTimeout(resolve, 200));
+					canvas = await this.waitForCanvas(canvasPath, leaf.view.containerEl.win);
+				}
+				if (!canvas) {
+					new Notice("Canvas not found");
+					return;
 				}
 			}
 
-			const canvas = this.canvasApi.getActiveCanvas() ?? this.canvasApi.getAnyCanvas();
+			canvas ??= this.canvasApi.getActiveCanvas() ?? this.canvasApi.getAnyCanvas();
 			if (!canvas) {
 				new Notice("Canvas not found");
 				return;
@@ -445,6 +469,16 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.navSkipTracking = false;
 	}
 
+	private async waitForCanvas(path: string, win: Window): Promise<Canvas | null> {
+		for (let attempt = 0; attempt < 40; attempt++) {
+			if (this.unloaded) return null;
+			const canvas = this.canvasApi.getActiveCanvas();
+			if (canvas?.view.file.path === path) return canvas;
+			await new Promise<void>((resolve) => win.setTimeout(resolve, 50));
+		}
+		return null;
+	}
+
 	onunload(): void {
 		this.unloaded = true;
 		// Cancel all pending async operations first
@@ -508,6 +542,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (this.enterTabBtnEl) {
 			this.enterTabBtnEl.remove();
 			this.enterTabBtnEl = null;
+		}
+		if (this.mobileActionsBtnEl) {
+			this.mobileActionsBtnEl.remove();
+			this.mobileActionsBtnEl = null;
 		}
 	}
 
@@ -595,6 +633,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.enterTabBtnEl.remove();
 				this.enterTabBtnEl = null;
 			}
+			if (this.mobileActionsBtnEl) {
+				this.mobileActionsBtnEl.remove();
+				this.mobileActionsBtnEl = null;
+			}
 			this.hideOutline();
 			return;
 		}
@@ -606,8 +648,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.injectToggleButton(canvas);
 
 		// Set up Ctrl+click zoom handler
-		this.cleanupClickHandler =
-			this.navigation.registerClickHandler(canvas);
+		this.cleanupClickHandler = Platform.isMobile
+			? null
+			: this.navigation.registerClickHandler(canvas);
 
 		// Set up drag-end edge update handler
 		this.cleanupDragHandler =
@@ -635,8 +678,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 		);
 
 		// Set up group drag handler (Alt+drag leaves stranger nodes behind)
-		this.cleanupGroupDragHandler =
-			registerGroupDragHandler(canvas, this.canvasApi);
+		this.cleanupGroupDragHandler = Platform.isMobile
+			? null
+			: registerGroupDragHandler(canvas, this.canvasApi);
 
 		// Add persistent collapse controls to nodes that have descendants.
 		this.branchCollapseHandle = registerBranchCollapse(canvas, this.canvasApi);
@@ -753,9 +797,11 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.finishInsertNode(canvas, newNode, parentNode);
 			}
 		};
-		canvas.wrapperEl.addEventListener("click", onInsertNodeClick, true);
-		this.cleanupInsertNodeHandler = () =>
-			canvas.wrapperEl.removeEventListener("click", onInsertNodeClick, true);
+		if (!Platform.isMobile) {
+			canvas.wrapperEl.addEventListener("click", onInsertNodeClick, true);
+			this.cleanupInsertNodeHandler = () =>
+				canvas.wrapperEl.removeEventListener("click", onInsertNodeClick, true);
+		}
 
 		// Set up auto-resize handler (grow/shrink nodes with content)
 		this.autoResizeHandle = registerAutoResize(
@@ -792,7 +838,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			}
 		};
 		// Mouse back/forward buttons for navigation history (optional)
-		if (this.settings.mouseNavigation) {
+		if (this.settings.mouseNavigation && !Platform.isMobile) {
 			const onPointerDown = (e: PointerEvent) => {
 				if (e.button === 3) {
 					e.preventDefault();
@@ -1141,17 +1187,18 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.canvasApi.selectAndEdit(canvas, newNode, this.settings.navigationZoomPadding);
 	}
 
-	private showOutline(canvas: Canvas): void {
+	private showOutline(canvas: Canvas, reveal = !Platform.isMobile): void {
 		const leaves = this.app.workspace.getLeavesOfType(OUTLINE_VIEW_TYPE);
 		if (leaves.length > 0) {
 			this.refreshOutline(canvas);
+			if (reveal) void this.app.workspace.revealLeaf(leaves[0]);
 			return;
 		}
 		const leaf = this.app.workspace.getRightLeaf(false);
 		if (!leaf) return;
 		void leaf.setViewState({ type: OUTLINE_VIEW_TYPE }).then(() => {
-			void this.app.workspace.revealLeaf(leaf);
-			this.reorderOutlineToTop(leaf);
+			if (reveal) void this.app.workspace.revealLeaf(leaf);
+			if (!Platform.isMobile) this.reorderOutlineToTop(leaf);
 			this.refreshOutline(canvas);
 		});
 	}
@@ -1277,10 +1324,14 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.enterTabBtnEl.remove();
 			this.enterTabBtnEl = null;
 		}
+		if (this.mobileActionsBtnEl) {
+			this.mobileActionsBtnEl.remove();
+			this.mobileActionsBtnEl = null;
+		}
 		const controls = canvas.view.containerEl.querySelector('.canvas-controls');
 		if (!controls) return;
 
-		const btn = controls.createDiv();
+		const btn = controls.createEl('button', { attr: { type: 'button' } });
 		btn.addClass('cammvas-toggle-btn', 'clickable-icon');
 		btn.setAttribute('aria-label', 'Toggle mindmap mode');
 		this.registerDomEvent(btn, 'click', (e) => {
@@ -1291,31 +1342,94 @@ export default class CanvasMindMapPlugin extends Plugin {
 		controls.prepend(btn);
 		this.toggleBtnEl = btn;
 
-		const dragBtn = controls.createDiv();
+		const dragBtn = controls.createEl('button', { attr: { type: 'button' } });
 		dragBtn.addClass('cammvas-toggle-btn', 'cammvas-drag-reparent-btn', 'clickable-icon');
 		this.registerDomEvent(dragBtn, 'click', (e) => {
 			e.stopPropagation();
+			if (!canvas.handleSelectionDrag) {
+				new Notice("Drag to reparent is unavailable in this canvas version");
+				return;
+			}
 			this.settings.dragToReparent = !this.settings.dragToReparent;
 			this.updateDragReparentButton();
 			void this.saveSettings();
 		});
 		btn.after(dragBtn);
 		this.dragReparentBtnEl = dragBtn;
+		dragBtn.toggleClass('is-disabled', !canvas.handleSelectionDrag);
 
-		const enterTabBtn = controls.createDiv();
-		enterTabBtn.addClass('cammvas-toggle-btn', 'cammvas-enter-tab-btn', 'clickable-icon');
-		this.registerDomEvent(enterTabBtn, 'click', (e) => {
-			e.stopPropagation();
-			this.settings.enterCreatesSibling = !this.settings.enterCreatesSibling;
-			this.updateEnterTabButton();
-			void this.saveSettings();
-		});
-		dragBtn.after(enterTabBtn);
-		this.enterTabBtnEl = enterTabBtn;
+		if (Platform.isMobile) {
+			const actionsBtn = controls.createEl('button', { attr: { type: 'button' } });
+			actionsBtn.addClass('cammvas-toggle-btn', 'cammvas-mobile-actions-btn', 'clickable-icon');
+			actionsBtn.setAttribute('aria-label', 'Mind map actions');
+			setIcon(actionsBtn, 'list-plus');
+			this.registerDomEvent(actionsBtn, 'click', (event) => {
+				event.stopPropagation();
+				this.showMobileActionsMenu(canvas, actionsBtn);
+			});
+			dragBtn.after(actionsBtn);
+			this.mobileActionsBtnEl = actionsBtn;
+		} else {
+			const enterTabBtn = controls.createEl('button', { attr: { type: 'button' } });
+			enterTabBtn.addClass('cammvas-toggle-btn', 'cammvas-enter-tab-btn', 'clickable-icon');
+			this.registerDomEvent(enterTabBtn, 'click', (event) => {
+				event.stopPropagation();
+				this.settings.enterCreatesSibling = !this.settings.enterCreatesSibling;
+				this.updateEnterTabButton();
+				void this.saveSettings();
+			});
+			dragBtn.after(enterTabBtn);
+			this.enterTabBtnEl = enterTabBtn;
+		}
 
 		this.updateToggleButton(canvas);
 		this.updateDragReparentButton();
 		this.updateEnterTabButton();
+	}
+
+	private showMobileActionsMenu(canvas: Canvas, anchor: HTMLElement): void {
+		const menu = new Menu();
+		const selected = this.canvasApi.getSelectedNode(canvas);
+		const isMindmap = this.isMindmapCanvas(canvas);
+		menu.addItem((item) => item
+			.setTitle("Create root node")
+			.setIcon("circle-plus")
+			.setDisabled(!isMindmap)
+			.onClick(() => this.createRootNode()));
+		if (selected && isMindmap) {
+			menu.addItem((item) => item
+				.setTitle("Add child node")
+				.setIcon("corner-down-right")
+				.onClick(() => this.keyboardHandler.addChildNode(canvas, selected)));
+			menu.addItem((item) => item
+				.setTitle("Add sibling node")
+				.setIcon("list-plus")
+				.onClick(() => this.keyboardHandler.addSiblingNode(canvas, selected)));
+			menu.addItem((item) => item
+				.setTitle("Zoom to branch")
+				.setIcon("scan")
+				.onClick(() => this.navigation.zoomToBranch(canvas, selected)));
+			if (this.canvasApi.getChildNodes(canvas, selected).length > 0) {
+				menu.addItem((item) => item
+					.setTitle("Re-layout selected branch")
+					.setIcon("list-tree")
+					.onClick(() => this.relayoutSelectedBranch(canvas, selected)));
+			}
+		}
+		menu.addItem((item) => item
+			.setTitle("Re-layout mind map")
+			.setIcon("layout-template")
+			.setDisabled(!isMindmap)
+			.onClick(() => {
+				this.layoutEngine.layout(canvas);
+				this.updateGroupBounds(canvas);
+			}));
+		menu.addItem((item) => item
+			.setTitle("Open map outline")
+			.setIcon("list-tree")
+			.onClick(() => this.showOutline(canvas, true)));
+		const rect = anchor.getBoundingClientRect();
+		menu.showAtPosition({ x: rect.left, y: rect.bottom });
 	}
 
 	private updateToggleButton(canvas: Canvas): void {

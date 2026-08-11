@@ -38,15 +38,17 @@ export function collectDescendantIdsForRoots(
 export function findDropTarget<T extends DropTargetNode>(
 	nodes: Iterable<T>,
 	point: { x: number; y: number },
-	excludedIds: ReadonlySet<string>
+	excludedIds: ReadonlySet<string>,
+	hitPadding = 0
 ): T | null {
 	let best: T | null = null;
 	let bestZIndex = -Infinity;
+	const padding = Math.max(0, hitPadding);
 
 	for (const node of nodes) {
 		if (excludedIds.has(node.id)) continue;
-		if (point.x < node.x || point.x > node.x + node.width) continue;
-		if (point.y < node.y || point.y > node.y + node.height) continue;
+		if (point.x < node.x - padding || point.x > node.x + node.width + padding) continue;
+		if (point.y < node.y - padding || point.y > node.y + node.height + padding) continue;
 
 		const zIndex = node.zIndex ?? 0;
 		if (!best || zIndex >= bestZIndex) {
@@ -56,6 +58,10 @@ export function findDropTarget<T extends DropTargetNode>(
 	}
 
 	return best;
+}
+
+export function shouldReparentOnDragEnd(eventType: string): boolean {
+	return eventType === "pointerup";
 }
 
 export function getTopLevelSelectedIds(

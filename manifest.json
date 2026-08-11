@@ -6,5 +6,5 @@
 	"description": "Bring dedicated mind-mapping workflows to Canvas with branch drag-and-drop, collapsible trees, familiar hotkeys, automatic layout, and an outline.",
 	"author": "cuatrecasespro",
 	"authorUrl": "https://github.com/cuatrecasespro",
-	"isDesktopOnly": true
+	"isDesktopOnly": false
 }

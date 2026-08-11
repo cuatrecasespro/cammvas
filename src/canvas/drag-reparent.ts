@@ -5,6 +5,7 @@ import {
 	collectDescendantIdsForRoots,
 	findDropTarget,
 	getTopLevelSelectedIds,
+	shouldReparentOnDragEnd,
 } from "./drag-reparent-state";
 import { getGroupIds } from "../mindmap/tree-model";
 
@@ -14,16 +15,29 @@ export function registerDragReparent(
 	canvas: Canvas,
 	canvasApi: CanvasAPI,
 	isEnabled: () => boolean,
-	onReparent: (nodes: CanvasNode[], newParent: CanvasNode) => void
+	onReparent: (nodes: CanvasNode[], newParent: CanvasNode) => void,
+	touchHitPadding = 12
 ): () => void {
 	const original = canvas.handleSelectionDrag;
 	if (!original) return () => {};
 
 	let highlighted: CanvasNode | null = null;
+	let touchSession = 0;
 
 	const clearHighlight = (): void => {
 		highlighted?.nodeEl.removeClass(DROP_TARGET_CLASS);
 		highlighted = null;
+	};
+
+	const pointerDownHandler = (event: PointerEvent): void => {
+		if (event.pointerType !== "touch" || event.isPrimary) return;
+		touchSession++;
+		clearHighlight();
+	};
+
+	const cancelHandler = (event: PointerEvent): void => {
+		if (event.pointerType === "touch") touchSession++;
+		clearHighlight();
 	};
 
 	const replacement = function (
@@ -32,6 +46,10 @@ export function registerDragReparent(
 		dragEl: HTMLElement,
 		directNode?: CanvasNode
 	): CanvasDragHandler | void {
+		const isTouchDrag = event.pointerType === "touch";
+		const touchSessionId = isTouchDrag ? ++touchSession : 0;
+		if (isTouchDrag) clearHighlight();
+
 		const groupIds = getGroupIds(canvas);
 		const selectedNodes = Array.from(canvas.selection)
 			.map((item) => canvas.nodes.get(item.id))
@@ -52,9 +70,10 @@ export function registerDragReparent(
 			}
 		);
 		const draggedNodes = candidateNodes.filter((node) => topLevelIds.has(node.id));
-		const eligible = isEnabled()
+		let eligible = isEnabled()
 			&& draggedNodes.length > 0
-			&& (!directNode || !groupIds.has(directNode.id));
+			&& (!directNode || !groupIds.has(directNode.id))
+			&& (!isTouchDrag || event.isPrimary);
 
 		const handler = original.call(this, event, dragEl, directNode);
 		if (!handler || !eligible) return handler;
@@ -67,11 +86,31 @@ export function registerDragReparent(
 		for (const node of draggedNodes) excludedIds.add(node.id);
 		for (const groupId of groupIds) excludedIds.add(groupId);
 
-		const targetAt = (pointerEvent: MouseEvent): CanvasNode | null =>
-			findDropTarget(canvas.nodes.values(), canvas.posFromEvt(pointerEvent), excludedIds);
+		const hasEligiblePointer = (pointerEvent: PointerEvent): boolean => {
+			if (!isTouchDrag) return true;
+			const valid = touchSessionId === touchSession
+				&& pointerEvent.pointerType === "touch"
+				&& pointerEvent.pointerId === event.pointerId
+				&& pointerEvent.isPrimary;
+			if (!valid) {
+				eligible = false;
+				clearHighlight();
+			}
+			return valid;
+		};
 
-		const updateHighlight = (pointerEvent: MouseEvent): CanvasNode | null => {
-			const target = isEnabled() ? targetAt(pointerEvent) : null;
+		const targetAt = (pointerEvent: PointerEvent): CanvasNode | null =>
+			findDropTarget(
+				canvas.nodes.values(),
+				canvas.posFromEvt(pointerEvent),
+				excludedIds,
+				isTouchDrag ? touchHitPadding : 0
+			);
+
+		const updateHighlight = (pointerEvent: PointerEvent): CanvasNode | null => {
+			const target = eligible && hasEligiblePointer(pointerEvent) && isEnabled()
+				? targetAt(pointerEvent)
+				: null;
 			if (target === highlighted) return target;
 			clearHighlight();
 			target?.nodeEl.addClass(DROP_TARGET_CLASS);
@@ -89,7 +128,10 @@ export function registerDragReparent(
 			updateHighlight(moveEvent);
 		};
 		handler.end = (endEvent: PointerEvent) => {
-			const target = updateHighlight(endEvent);
+			const shouldCommit = shouldReparentOnDragEnd(endEvent.type)
+				&& eligible
+				&& hasEligiblePointer(endEvent);
+			const target = shouldCommit ? updateHighlight(endEvent) : null;
 			clearHighlight();
 			const duplicating = Platform.isMacOS ? endEvent.altKey : endEvent.ctrlKey;
 			try {
@@ -111,9 +153,16 @@ export function registerDragReparent(
 	};
 
 	canvas.handleSelectionDrag = replacement;
+	canvas.wrapperEl?.addEventListener("pointerdown", pointerDownHandler, true);
+	canvas.wrapperEl?.addEventListener("pointercancel", cancelHandler, true);
+	canvas.wrapperEl?.addEventListener("lostpointercapture", cancelHandler, true);
 
 	return () => {
+		touchSession++;
 		clearHighlight();
+		canvas.wrapperEl?.removeEventListener("pointerdown", pointerDownHandler, true);
+		canvas.wrapperEl?.removeEventListener("pointercancel", cancelHandler, true);
+		canvas.wrapperEl?.removeEventListener("lostpointercapture", cancelHandler, true);
 		if (canvas.handleSelectionDrag === replacement) {
 			canvas.handleSelectionDrag = original;
 		}

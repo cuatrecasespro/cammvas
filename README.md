@@ -55,7 +55,7 @@ Once Cammvas is accepted into the Obsidian community directory:
 
 ## Compatibility
 
-Cammvas currently requires Obsidian 1.13.4 or newer and is desktop-only. Several advanced Canvas interactions depend on undocumented runtime APIs, so compatibility is tested against current Obsidian releases.
+Cammvas requires Obsidian 1.13.4 or newer. Desktop and mobile use the same Canvas files and core mind-mapping features. On mobile, long-press and drag a node to reparent it; mouse- and modifier-specific interactions remain desktop-only. Several advanced Canvas interactions depend on undocumented runtime APIs, so compatibility is tested against current Obsidian releases.
 
 ## Privacy And Permissions
 

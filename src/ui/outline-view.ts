@@ -1,6 +1,7 @@
-import { ItemView, WorkspaceLeaf, setIcon, Menu, Notice, SearchComponent } from "obsidian";
+import { ItemView, WorkspaceLeaf, setIcon, Menu, Platform, SearchComponent } from "obsidian";
 import type { Canvas, CanvasNode, CanvasView as CanvasViewType } from "../types/canvas-internal";
 import { buildForest, TreeNode, getDescendants, getGroupIds } from "../mindmap/tree-model";
+import { copyText } from "./clipboard";
 
 export const OUTLINE_VIEW_TYPE = "cammvas-outline";
 
@@ -298,34 +299,34 @@ export class OutlineView extends ItemView {
 			});
 		}
 
-		// Drag handle (before text content)
-		const dragHandle = self.createDiv({ cls: "tree-item-icon cammvas-outline-drag-handle" });
-		setIcon(dragHandle, "grip-vertical");
+		const dragHandle = Platform.isMobile
+			? null
+			: self.createDiv({ cls: "tree-item-icon cammvas-outline-drag-handle" });
+		if (dragHandle) setIcon(dragHandle, "grip-vertical");
 
 		self.createDiv({ cls: "tree-item-inner", text: getRootTitle(root.canvasNode.text) });
 
 		// Handle-based drag: only start drag when pointerdown on grip icon
-		let dragAllowed = false;
-		dragHandle.addEventListener("pointerdown", () => { dragAllowed = true; });
-		self.addEventListener("pointerup", () => { dragAllowed = false; });
-
-		self.setAttribute("draggable", "true");
-		self.addEventListener("dragstart", (e) => {
-			if (!dragAllowed) { e.preventDefault(); return; }
-			dragAllowed = false;
-			this.draggedRoot = root;
-			this.dragSourceGroupId = groupId ?? null;
-			self.addClass("is-dragging");
-			e.dataTransfer?.setData("text/plain", root.canvasNode.id);
-		});
-		self.addEventListener("dragend", () => {
-			self.removeClass("is-dragging");
-			this.draggedRoot = null;
-			this.dragSourceGroupId = null;
-			for (const [, el] of this.groupElMap) {
-				el.removeClass("is-drag-over");
-			}
-		});
+		if (dragHandle) {
+			let dragAllowed = false;
+			dragHandle.addEventListener("pointerdown", () => { dragAllowed = true; });
+			self.addEventListener("pointerup", () => { dragAllowed = false; });
+			self.setAttribute("draggable", "true");
+			self.addEventListener("dragstart", (e) => {
+				if (!dragAllowed) { e.preventDefault(); return; }
+				dragAllowed = false;
+				this.draggedRoot = root;
+				this.dragSourceGroupId = groupId ?? null;
+				self.addClass("is-dragging");
+				e.dataTransfer?.setData("text/plain", root.canvasNode.id);
+			});
+			self.addEventListener("dragend", () => {
+				self.removeClass("is-dragging");
+				this.draggedRoot = null;
+				this.dragSourceGroupId = null;
+				for (const [, el] of this.groupElMap) el.removeClass("is-drag-over");
+			});
+		}
 
 		this.allItemEls.set(root.canvasNode.id, self);
 
@@ -368,8 +369,11 @@ export class OutlineView extends ItemView {
 					.setIcon("link")
 					.onClick(() => {
 						const canvasPath = canvas.view.file.path;
-						void navigator.clipboard.writeText(`obsidian://cammvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${root.canvasNode.id}`);
-						new Notice("Node link copied");
+						void copyText(
+							self.win,
+							`obsidian://cammvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${root.canvasNode.id}`,
+							"Node link copied"
+						);
 					});
 			});
 			if (isUngrouped) {
@@ -422,8 +426,11 @@ export class OutlineView extends ItemView {
 					.setIcon("link")
 					.onClick(() => {
 						const canvasPath = canvas.view.file.path;
-						void navigator.clipboard.writeText(`obsidian://cammvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${node.canvasNode.id}`);
-						new Notice("Node link copied");
+						void copyText(
+							self.win,
+							`obsidian://cammvas-navigate?canvas=${encodeURIComponent(canvasPath)}&id=${node.canvasNode.id}`,
+							"Node link copied"
+						);
 					});
 			});
 			menu.showAtMouseEvent(e);

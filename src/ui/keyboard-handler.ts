@@ -91,23 +91,7 @@ export class KeyboardHandler {
 				if (!node) return false;
 				if (checking) return true;
 
-				let selectedText: string | null = null;
-				if (node.isEditing) {
-					selectedText = this.extractAndDeleteSelection(node);
-				}
-				this.onBeforeLeaveNode?.();
-				const newNode = this.nodeOps.addChild(canvas, node);
-				if (newNode) {
-					if (selectedText) newNode.setText(selectedText);
-					if (this.autoLayoutEnabled()) {
-						this.layoutEngine.layoutChildren(canvas, node.id, new Set([newNode.id]));
-					}
-					if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {
-						this.branchColors.applyColors(canvas);
-					}
-					this.onNodesChanged(canvas);
-					this.canvasApi.selectAndEdit(canvas, newNode, this.zoomPadding);
-				}
+				this.addChildNode(canvas, node);
 			},
 		});
 
@@ -122,26 +106,7 @@ export class KeyboardHandler {
 				if (!node) return false;
 				if (checking) return true;
 
-				let selectedText: string | null = null;
-				if (node.isEditing) {
-					selectedText = this.extractAndDeleteSelection(node);
-				}
-				this.onBeforeLeaveNode?.();
-				const newNode = this.nodeOps.addSibling(canvas, node);
-				if (newNode) {
-					if (selectedText) newNode.setText(selectedText);
-					const parent = this.canvasApi.getParentNode(canvas, node);
-					if (parent) {
-						if (this.autoLayoutEnabled()) {
-							this.layoutEngine.layoutChildren(canvas, parent.id, new Set([newNode.id]));
-						}
-					}
-					if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {
-						this.branchColors.applyColors(canvas);
-					}
-					this.onNodesChanged(canvas);
-					this.canvasApi.selectAndEdit(canvas, newNode, this.zoomPadding);
-				}
+				this.addSiblingNode(canvas, node);
 			},
 		});
 
@@ -354,6 +319,39 @@ export class KeyboardHandler {
 		// Register physical-key fallback for non-Latin keyboard layouts
 		this.registerPhysicalKeyShortcuts();
 		this.plugin.register(() => this.unregisterArrowKeyNavigation());
+	}
+
+	addChildNode(canvas: Canvas, node: CanvasNode): void {
+		const selectedText = node.isEditing ? this.extractAndDeleteSelection(node) : null;
+		this.onBeforeLeaveNode?.();
+		const newNode = this.nodeOps.addChild(canvas, node);
+		if (!newNode) return;
+		if (selectedText) newNode.setText(selectedText);
+		if (this.autoLayoutEnabled()) {
+			this.layoutEngine.layoutChildren(canvas, node.id, new Set([newNode.id]));
+		}
+		if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {
+			this.branchColors.applyColors(canvas);
+		}
+		this.onNodesChanged(canvas);
+		this.canvasApi.selectAndEdit(canvas, newNode, this.zoomPadding);
+	}
+
+	addSiblingNode(canvas: Canvas, node: CanvasNode): void {
+		const selectedText = node.isEditing ? this.extractAndDeleteSelection(node) : null;
+		this.onBeforeLeaveNode?.();
+		const newNode = this.nodeOps.addSibling(canvas, node);
+		if (!newNode) return;
+		if (selectedText) newNode.setText(selectedText);
+		const parent = this.canvasApi.getParentNode(canvas, node);
+		if (parent && this.autoLayoutEnabled()) {
+			this.layoutEngine.layoutChildren(canvas, parent.id, new Set([newNode.id]));
+		}
+		if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {
+			this.branchColors.applyColors(canvas);
+		}
+		this.onNodesChanged(canvas);
+		this.canvasApi.selectAndEdit(canvas, newNode, this.zoomPadding);
 	}
 
 	handleEditingEnter(canvas: Canvas, event: KeyboardEvent): boolean {

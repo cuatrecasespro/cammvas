@@ -76,6 +76,8 @@ export function registerDragEndHandler(canvas: Canvas): () => void {
 	const THROTTLE_MS = 40; // ~25fps — responsive but not wasteful
 
 	const moveHandler = (e: PointerEvent) => {
+		// Touch gets one final update on pointerup instead of scanning every edge while dragging.
+		if (e.pointerType === "touch") return;
 		// Only update while a button is pressed (i.e. during a drag)
 		if (e.buttons === 0) return;
 
@@ -86,15 +88,22 @@ export function registerDragEndHandler(canvas: Canvas): () => void {
 		updateAllEdgeSides(canvas);
 	};
 
-	const upHandler = () => {
+	const upHandler = (e: PointerEvent) => {
+		if (e.pointerType === "touch" && !e.isPrimary) return;
 		updateAllEdgeSides(canvas);
+	};
+
+	const cancelHandler = () => {
+		lastMoveUpdate = 0;
 	};
 
 	canvas.wrapperEl?.addEventListener("pointermove", moveHandler);
 	canvas.wrapperEl?.addEventListener("pointerup", upHandler);
+	canvas.wrapperEl?.addEventListener("pointercancel", cancelHandler);
 
 	return () => {
 		canvas.wrapperEl?.removeEventListener("pointermove", moveHandler);
 		canvas.wrapperEl?.removeEventListener("pointerup", upHandler);
+		canvas.wrapperEl?.removeEventListener("pointercancel", cancelHandler);
 	};
 }

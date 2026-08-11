@@ -1,4 +1,4 @@
-import { App, PluginSettingTab } from "obsidian";
+import { App, Platform, PluginSettingTab } from "obsidian";
 import type { SettingDefinitionItem } from "obsidian";
 import type CanvasMindMapPlugin from "./main";
 import { DEFAULT_BRANCH_PALETTE, parsePalette } from "./mindmap/color-palette";
@@ -118,14 +118,14 @@ export class MindMapSettingTab extends PluginSettingTab {
 			{ name: "Branch color palette", desc: "Comma-separated Canvas colors (1-6) or hex colors, assigned to top-level branches", control: { type: "text", key: "branchPalette", placeholder: "1, 2, 3, 4, 5, 6" } },
 			{ name: "Color leaf nodes", desc: "Turn off to leave terminal nodes neutral while keeping their incoming edge colored", control: { type: "toggle", key: "colorLeafNodes" } },
 			{ name: "Arrow key navigation", desc: "Navigate between selected mind map nodes with the arrow keys; disable to move Canvas cards natively", control: { type: "toggle", key: "arrowKeyNavigation" } },
-			{ name: "Drag to reparent", desc: "Drop a node onto another node to make it a child while preserving its branch", control: { type: "toggle", key: "dragToReparent" } },
-			{ name: "Mind mapping Enter and Tab", desc: "Enter creates a sibling while editing, Tab creates a child, and Shift+Enter inserts a new line", control: { type: "toggle", key: "enterCreatesSibling" } },
+			{ name: "Drag to reparent", desc: Platform.isMobile ? "Long-press and drag a node onto another node to make it a child while preserving its branch" : "Drop a node onto another node to make it a child while preserving its branch", control: { type: "toggle", key: "dragToReparent" } },
+			{ name: "Mind mapping Enter and Tab", desc: Platform.isMobile ? "Use Enter and Tab from a hardware keyboard to create sibling and child nodes" : "Enter creates a sibling while editing, Tab creates a child, and Shift+Enter inserts a new line", control: { type: "toggle", key: "enterCreatesSibling" } },
 			{ name: "Horizontal gap", desc: "Space between parent and child nodes (px)", control: positiveNumber("horizontalGap") },
 			{ name: "Vertical gap", desc: "Space between sibling nodes (px)", control: positiveNumber("verticalGap") },
 			{ name: "Default node width", desc: "Width of newly created nodes (px)", control: positiveNumber("defaultNodeWidth") },
 			{ name: "Default node height", desc: "Height of newly created nodes (px)", control: positiveNumber("defaultNodeHeight") },
 			{ name: "Max node height", desc: "Maximum height a node can grow to before scrolling (px)", control: positiveNumber("maxNodeHeight") },
-			{ name: "Mouse back/forward navigation", desc: "Use mouse back/forward buttons for in-canvas navigation instead of Obsidian's default note navigation", control: { type: "toggle", key: "mouseNavigation" } },
+			{ name: "Mouse back/forward navigation", desc: "Use mouse back/forward buttons for in-canvas navigation instead of Obsidian's default note navigation", visible: () => !Platform.isMobile, control: { type: "toggle", key: "mouseNavigation" } },
 			{ name: "Navigation zoom padding", desc: "Extra space around the target node when zooming after navigation (px). 0 = tight zoom.", control: { type: "number", key: "navigationZoomPadding", min: 0, step: 1, validate: (value) => value >= 0 ? undefined : "Enter zero or a positive number." } },
 		];
 	}

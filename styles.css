@@ -183,3 +183,41 @@
 	font-size: var(--font-ui-small);
 	font-style: italic;
 }
+
+.is-mobile .cammvas-toggle-btn {
+	width: 44px;
+	height: 44px;
+}
+
+.is-mobile .cammvas-canvas-collapse-button {
+	top: 0;
+	right: 0;
+	width: 44px;
+	height: 44px;
+	padding: 12px;
+	opacity: 1;
+	touch-action: manipulation;
+}
+
+.is-mobile .cammvas-outline .tree-item-self {
+	min-height: 44px;
+}
+
+.is-mobile .cammvas-outline .collapse-icon {
+	min-width: 44px;
+	min-height: 44px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.is-mobile .cammvas-outline-drag-handle {
+	display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.canvas-node.mindmap-animating,
+	.canvas-node.mindmap-group-animating {
+		transition: none;
+	}
+}
