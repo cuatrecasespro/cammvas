@@ -22,6 +22,7 @@ import { registerAutoResize, AutoResizeHandle, getEditorElements } from "./ui/au
 import { OutlineView, OUTLINE_VIEW_TYPE } from "./ui/outline-view";
 import { isHtmlElement } from "./ui/dom";
 import { copyText } from "./ui/clipboard";
+import { registerMobileEditingBar, MobileEditingBarHandle } from "./ui/mobile-editing-bar";
 import { freemindToCanvas } from "./import/freemind-import";
 import { getGroupIds, buildForest, findTreeForNode } from "./mindmap/tree-model";
 
@@ -47,6 +48,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private dragReparentBtnEl: HTMLElement | null = null;
 	private enterTabBtnEl: HTMLElement | null = null;
 	private mobileActionsBtnEl: HTMLElement | null = null;
+	private mobileEditingBarHandle: MobileEditingBarHandle | null = null;
 	private cleanupGroupBoundsHandler: (() => void) | null = null;
 	private cleanupSelectionSyncHandler: (() => void) | null = null;
 	private cleanupInsertNodeHandler: (() => void) | null = null;
@@ -525,6 +527,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.autoResizeHandle.cleanup();
 			this.autoResizeHandle = null;
 		}
+		if (this.mobileEditingBarHandle) {
+			this.mobileEditingBarHandle.cleanup();
+			this.mobileEditingBarHandle = null;
+		}
 		if (this.branchCollapseHandle) {
 			this.branchCollapseHandle.cleanup();
 			this.branchCollapseHandle = null;
@@ -602,6 +608,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (this.autoResizeHandle) {
 			this.autoResizeHandle.cleanup();
 			this.autoResizeHandle = null;
+		}
+		if (this.mobileEditingBarHandle) {
+			this.mobileEditingBarHandle.cleanup();
+			this.mobileEditingBarHandle = null;
 		}
 		if (this.branchCollapseHandle) {
 			this.branchCollapseHandle.cleanup();
@@ -837,6 +847,25 @@ export default class CanvasMindMapPlugin extends Plugin {
 				});
 			}
 		};
+		if (Platform.isMobile) {
+			this.mobileEditingBarHandle = registerMobileEditingBar(
+				canvas,
+				() => this.isMindmapCanvas(canvas),
+				(node) => this.canvasApi.getParentNode(canvas, node) !== null,
+				(node) => this.keyboardHandler.addChildNode(canvas, node, {
+					immediateEdit: true,
+					transferSelection: false,
+				}),
+				(node) => this.keyboardHandler.addSiblingNode(canvas, node, {
+					immediateEdit: true,
+					transferSelection: false,
+				}),
+				(node) => {
+					this.keyboardHandler.onBeforeLeaveNode?.();
+					node.blur();
+				}
+			);
+		}
 		// Mouse back/forward buttons for navigation history (optional)
 		if (this.settings.mouseNavigation && !Platform.isMobile) {
 			const onPointerDown = (e: PointerEvent) => {
@@ -1311,6 +1340,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.updateDragReparentButton(canvas);
 		this.updateEnterTabButton(canvas);
 		this.updateMobileActionsButton(canvas);
+		this.mobileEditingBarHandle?.refresh();
 	}
 
 	private injectToggleButton(canvas: Canvas): void {

@@ -269,8 +269,17 @@ export class CanvasAPI {
 		}
 	}
 
-	selectAndEdit(canvas: Canvas, node: CanvasNode, zoomPadding: number = 0): void {
+	selectAndEdit(
+		canvas: Canvas,
+		node: CanvasNode,
+		zoomPadding: number = 0,
+		immediate: boolean = false
+	): void {
 		this.selectAndZoom(canvas, node, zoomPadding);
+		if (immediate) {
+			node.startEditing();
+			return;
+		}
 		canvas.wrapperEl.win.setTimeout(() => {
 			node.startEditing();
 		}, 50);

@@ -221,6 +221,57 @@
 	display: none;
 }
 
+.cammvas-mobile-editing-bar {
+	position: fixed;
+	left: 50%;
+	bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+	z-index: var(--layer-popover, 30);
+	display: flex;
+	gap: 6px;
+	width: min(420px, calc(100vw - 16px));
+	padding: 6px;
+	transform: translateX(-50%);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 12px;
+	background: var(--background-primary);
+	box-shadow: 0 4px 18px rgba(0, 0, 0, 0.24);
+}
+
+.cammvas-mobile-editing-bar[hidden] {
+	display: none;
+}
+
+.cammvas-mobile-editing-bar.is-visual-viewport-positioned {
+	bottom: auto;
+}
+
+.cammvas-mobile-editing-action {
+	display: flex;
+	flex: 1 1 0;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	min-width: 0;
+	height: 44px;
+	padding: 0 8px;
+	font-weight: var(--font-semibold);
+	touch-action: manipulation;
+}
+
+.cammvas-mobile-editing-action-icon {
+	display: flex;
+	flex: 0 0 auto;
+}
+
+.cammvas-mobile-editing-action-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.cammvas-mobile-editing-done {
+	flex-grow: 0.8;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.canvas-node.mindmap-animating,
 	.canvas-node.mindmap-group-animating {

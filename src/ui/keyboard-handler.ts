@@ -321,8 +321,14 @@ export class KeyboardHandler {
 		this.plugin.register(() => this.unregisterArrowKeyNavigation());
 	}
 
-	addChildNode(canvas: Canvas, node: CanvasNode): void {
-		const selectedText = node.isEditing ? this.extractAndDeleteSelection(node) : null;
+	addChildNode(
+		canvas: Canvas,
+		node: CanvasNode,
+		options: { immediateEdit?: boolean; transferSelection?: boolean } = {}
+	): void {
+		const selectedText = node.isEditing && options.transferSelection !== false
+			? this.extractAndDeleteSelection(node)
+			: null;
 		this.onBeforeLeaveNode?.();
 		const newNode = this.nodeOps.addChild(canvas, node);
 		if (!newNode) return;
@@ -334,11 +340,17 @@ export class KeyboardHandler {
 			this.branchColors.applyColors(canvas);
 		}
 		this.onNodesChanged(canvas);
-		this.canvasApi.selectAndEdit(canvas, newNode, this.zoomPadding);
+		this.canvasApi.selectAndEdit(canvas, newNode, this.zoomPadding, options.immediateEdit);
 	}
 
-	addSiblingNode(canvas: Canvas, node: CanvasNode): void {
-		const selectedText = node.isEditing ? this.extractAndDeleteSelection(node) : null;
+	addSiblingNode(
+		canvas: Canvas,
+		node: CanvasNode,
+		options: { immediateEdit?: boolean; transferSelection?: boolean } = {}
+	): void {
+		const selectedText = node.isEditing && options.transferSelection !== false
+			? this.extractAndDeleteSelection(node)
+			: null;
 		this.onBeforeLeaveNode?.();
 		const newNode = this.nodeOps.addSibling(canvas, node);
 		if (!newNode) return;
@@ -351,7 +363,7 @@ export class KeyboardHandler {
 			this.branchColors.applyColors(canvas);
 		}
 		this.onNodesChanged(canvas);
-		this.canvasApi.selectAndEdit(canvas, newNode, this.zoomPadding);
+		this.canvasApi.selectAndEdit(canvas, newNode, this.zoomPadding, options.immediateEdit);
 	}
 
 	handleEditingEnter(canvas: Canvas, event: KeyboardEvent): boolean {
