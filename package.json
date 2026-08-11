@@ -1,6 +1,6 @@
 {
 	"name": "cammvas",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"description": "Dedicated mind-mapping workflows inside Obsidian Canvas",
 	"main": "main.js",
 	"scripts": {
