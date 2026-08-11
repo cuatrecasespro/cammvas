@@ -38,6 +38,7 @@ export class KeyboardHandler {
 		private autoColorEnabled: () => boolean,
 		private autoLayoutEnabled: () => boolean,
 		private arrowKeyNavigationEnabled: () => boolean,
+		private centerNodeOnArrowNavigation: () => boolean,
 		private enterCreatesSiblingEnabled: () => boolean,
 		private isMindmapEnabled: (canvas: Canvas) => boolean = () => true,
 		private onNodesChanged: (canvas: Canvas) => void = () => {}
@@ -713,7 +714,11 @@ export class KeyboardHandler {
 			this.onNodesChanged(canvas);
 		}
 		if (this.arrowKeySelectionOnly) {
-			this.canvasApi.selectAndReveal(canvas, target, this.zoomPadding);
+			if (this.centerNodeOnArrowNavigation()) {
+				this.canvasApi.selectAndZoom(canvas, target, this.zoomPadding);
+			} else {
+				this.canvasApi.selectAndReveal(canvas, target, this.zoomPadding);
+			}
 		} else {
 			this.canvasApi.selectAndEdit(canvas, target, this.zoomPadding);
 		}

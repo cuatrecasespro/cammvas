@@ -12,6 +12,7 @@ Open **Settings > Cammvas** to configure the plugin.
 | Auto-layout | Automatically arrange nodes after adding/deleting | On |
 | Auto-color branches | Assign distinct colors to top-level branches | On |
 | Arrow key navigation | Navigate selected nodes with plain arrow keys instead of moving cards | On |
+| Center node during arrow navigation | Always center the selected node instead of moving the viewport only when needed | Off |
 | Drag to reparent | Drop a node onto another node to make it a child while preserving its branch | On |
 | Mind mapping Enter and Tab | Enter creates a sibling while editing, Tab creates a child, and Shift+Enter inserts a new line | On |
 | Branch color palette | Comma-separated Canvas colors (1-6) or hex colors | 1, 2, 3, 4, 5, 6 |

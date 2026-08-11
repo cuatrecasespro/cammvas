@@ -9,6 +9,7 @@ export interface MindMapSettings {
 	branchPalette: string[];
 	colorLeafNodes: boolean;
 	arrowKeyNavigation: boolean;
+	centerNodeOnArrowNavigation: boolean;
 	dragToReparent: boolean;
 	enterCreatesSibling: boolean;
 	horizontalGap: number;
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS: MindMapSettings = {
 	branchPalette: [...DEFAULT_BRANCH_PALETTE],
 	colorLeafNodes: true,
 	arrowKeyNavigation: true,
+	centerNodeOnArrowNavigation: false,
 	dragToReparent: true,
 	enterCreatesSibling: true,
 	horizontalGap: 80,
@@ -44,6 +46,7 @@ const BOOLEAN_SETTING_KEYS = [
 	"autoColor",
 	"colorLeafNodes",
 	"arrowKeyNavigation",
+	"centerNodeOnArrowNavigation",
 	"dragToReparent",
 	"enterCreatesSibling",
 	"defaultMindmapMode",
@@ -118,6 +121,7 @@ export class MindMapSettingTab extends PluginSettingTab {
 			{ name: "Branch color palette", desc: "Comma-separated Canvas colors (1-6) or hex colors, assigned to top-level branches", control: { type: "text", key: "branchPalette", placeholder: "1, 2, 3, 4, 5, 6" } },
 			{ name: "Color leaf nodes", desc: "Turn off to leave terminal nodes neutral while keeping their incoming edge colored", control: { type: "toggle", key: "colorLeafNodes" } },
 			{ name: "Arrow key navigation", desc: "Navigate between selected mind map nodes with the arrow keys; disable to move Canvas cards natively", control: { type: "toggle", key: "arrowKeyNavigation" } },
+			{ name: "Center node during arrow navigation", desc: "Always center the selected node when navigating with the arrow keys instead of moving the viewport only when needed", control: { type: "toggle", key: "centerNodeOnArrowNavigation" } },
 			{ name: "Drag to reparent", desc: Platform.isMobile ? "Long-press and drag a node onto another node to make it a child while preserving its branch" : "Drop a node onto another node to make it a child while preserving its branch", control: { type: "toggle", key: "dragToReparent" } },
 			{ name: "Mind mapping Enter and Tab", desc: Platform.isMobile ? "Use Enter and Tab from a hardware keyboard to create sibling and child nodes" : "Enter creates a sibling while editing, Tab creates a child, and Shift+Enter inserts a new line", control: { type: "toggle", key: "enterCreatesSibling" } },
 			{ name: "Horizontal gap", desc: "Space between parent and child nodes (px)", control: positiveNumber("horizontalGap") },

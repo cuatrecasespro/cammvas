@@ -107,6 +107,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			() => this.settings.autoColor,
 			() => this.settings.autoLayout,
 			() => this.settings.arrowKeyNavigation,
+			() => this.settings.centerNodeOnArrowNavigation,
 			() => this.settings.enterCreatesSibling,
 			(canvas: Canvas) => this.isMindmapCanvas(canvas),
 			(canvas: Canvas) => this.updateGroupBounds(canvas)
