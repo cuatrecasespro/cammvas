@@ -5,12 +5,18 @@
 	color: var(--text-muted);
 }
 
-.cammvas-toggle-btn:hover {
+.cammvas-toggle-btn:not(:disabled):hover {
 	color: var(--text-normal);
 }
 
 .cammvas-toggle-btn.is-active {
 	color: var(--interactive-accent);
+}
+
+.cammvas-toggle-btn:disabled {
+	color: var(--text-faint);
+	opacity: 0.35;
+	cursor: not-allowed;
 }
 
 /* Smooth node repositioning animation */

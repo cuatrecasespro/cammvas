@@ -1308,6 +1308,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 		}
 
 		this.updateToggleButton(canvas);
+		this.updateDragReparentButton(canvas);
+		this.updateEnterTabButton(canvas);
+		this.updateMobileActionsButton(canvas);
 	}
 
 	private injectToggleButton(canvas: Canvas): void {
@@ -1351,12 +1354,11 @@ export default class CanvasMindMapPlugin extends Plugin {
 				return;
 			}
 			this.settings.dragToReparent = !this.settings.dragToReparent;
-			this.updateDragReparentButton();
+			this.updateDragReparentButton(canvas);
 			void this.saveSettings();
 		});
 		btn.after(dragBtn);
 		this.dragReparentBtnEl = dragBtn;
-		dragBtn.toggleClass('is-disabled', !canvas.handleSelectionDrag);
 
 		if (Platform.isMobile) {
 			const actionsBtn = controls.createEl('button', { attr: { type: 'button' } });
@@ -1375,7 +1377,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.registerDomEvent(enterTabBtn, 'click', (event) => {
 				event.stopPropagation();
 				this.settings.enterCreatesSibling = !this.settings.enterCreatesSibling;
-				this.updateEnterTabButton();
+				this.updateEnterTabButton(canvas);
 				void this.saveSettings();
 			});
 			dragBtn.after(enterTabBtn);
@@ -1383,8 +1385,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 		}
 
 		this.updateToggleButton(canvas);
-		this.updateDragReparentButton();
-		this.updateEnterTabButton();
+		this.updateDragReparentButton(canvas);
+		this.updateEnterTabButton(canvas);
+		this.updateMobileActionsButton(canvas);
 	}
 
 	private showMobileActionsMenu(canvas: Canvas, anchor: HTMLElement): void {
@@ -1442,27 +1445,49 @@ export default class CanvasMindMapPlugin extends Plugin {
 			isActive ? 'Mindmap mode (active)' : 'Mindmap mode (inactive)');
 	}
 
-	private updateDragReparentButton(): void {
+	private updateDragReparentButton(canvas = this.canvasApi.getActiveCanvas()): void {
 		if (!this.dragReparentBtnEl) return;
-		const isActive = this.settings.dragToReparent;
+		const mindmapEnabled = !!canvas && this.isMindmapCanvas(canvas);
+		const controlEnabled = mindmapEnabled && !!canvas.handleSelectionDrag;
+		const isActive = controlEnabled && this.settings.dragToReparent;
 		this.dragReparentBtnEl.empty();
 		setIcon(this.dragReparentBtnEl, 'git-branch');
 		this.dragReparentBtnEl.toggleClass('is-active', isActive);
+		this.dragReparentBtnEl.toggleAttribute('disabled', !controlEnabled);
+		this.dragReparentBtnEl.setAttribute('aria-disabled', String(!controlEnabled));
 		this.dragReparentBtnEl.setAttribute(
 			'aria-label',
-			isActive ? 'Drag to reparent (active)' : 'Drag to reparent (inactive)'
+			!mindmapEnabled
+				? 'Drag to reparent (requires mindmap mode)'
+				: isActive ? 'Drag to reparent (active)' : 'Drag to reparent (inactive)'
 		);
 	}
 
-	private updateEnterTabButton(): void {
+	private updateEnterTabButton(canvas = this.canvasApi.getActiveCanvas()): void {
 		if (!this.enterTabBtnEl) return;
-		const isActive = this.settings.enterCreatesSibling;
+		const controlEnabled = !!canvas && this.isMindmapCanvas(canvas);
+		const isActive = controlEnabled && this.settings.enterCreatesSibling;
 		this.enterTabBtnEl.empty();
 		setIcon(this.enterTabBtnEl, 'keyboard');
 		this.enterTabBtnEl.toggleClass('is-active', isActive);
+		this.enterTabBtnEl.toggleAttribute('disabled', !controlEnabled);
+		this.enterTabBtnEl.setAttribute('aria-disabled', String(!controlEnabled));
 		this.enterTabBtnEl.setAttribute(
 			'aria-label',
-			isActive ? 'Mind mapping Enter and Tab (active)' : 'Mind mapping Enter and Tab (inactive)'
+			!controlEnabled
+				? 'Mind mapping Enter and Tab (requires mindmap mode)'
+				: isActive ? 'Mind mapping Enter and Tab (active)' : 'Mind mapping Enter and Tab (inactive)'
+		);
+	}
+
+	private updateMobileActionsButton(canvas = this.canvasApi.getActiveCanvas()): void {
+		if (!this.mobileActionsBtnEl) return;
+		const controlEnabled = !!canvas && this.isMindmapCanvas(canvas);
+		this.mobileActionsBtnEl.toggleAttribute('disabled', !controlEnabled);
+		this.mobileActionsBtnEl.setAttribute('aria-disabled', String(!controlEnabled));
+		this.mobileActionsBtnEl.setAttribute(
+			'aria-label',
+			controlEnabled ? 'Mind map actions' : 'Mind map actions (requires mindmap mode)'
 		);
 	}
 
