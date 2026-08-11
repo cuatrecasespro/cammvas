@@ -713,7 +713,7 @@ export class KeyboardHandler {
 			this.onNodesChanged(canvas);
 		}
 		if (this.arrowKeySelectionOnly) {
-			this.canvasApi.selectAndZoom(canvas, target, this.zoomPadding);
+			this.canvasApi.selectAndReveal(canvas, target, this.zoomPadding);
 		} else {
 			this.canvasApi.selectAndEdit(canvas, target, this.zoomPadding);
 		}

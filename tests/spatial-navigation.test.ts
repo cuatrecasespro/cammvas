@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasNode } from "../src/types/canvas-internal";
-import { findNearestNodeInDirection } from "../src/ui/spatial-navigation";
+import { findNearestNodeInDirection, isRectFullyVisible } from "../src/ui/spatial-navigation";
 
 function node(id: string, x: number, y: number): CanvasNode {
 	return { id, x, y, width: 100, height: 50 } as CanvasNode;
@@ -31,5 +31,23 @@ describe("findNearestNodeInDirection", () => {
 
 	it("returns null when no node exists in that half-plane", () => {
 		expect(findNearestNodeInDirection(origin, [origin, node("left", -100, 0)], "right")).toBeNull();
+	});
+});
+
+describe("isRectFullyVisible", () => {
+	const viewport = { top: 0, right: 800, bottom: 600, left: 0 };
+
+	it("returns true when the node is fully inside the viewport", () => {
+		expect(isRectFullyVisible(
+			{ top: 100, right: 300, bottom: 200, left: 100 },
+			viewport
+		)).toBe(true);
+	});
+
+	it("returns false when any part of the node is outside the viewport", () => {
+		expect(isRectFullyVisible(
+			{ top: 100, right: 850, bottom: 200, left: 650 },
+			viewport
+		)).toBe(false);
 	});
 });

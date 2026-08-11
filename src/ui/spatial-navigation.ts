@@ -2,6 +2,20 @@ import type { CanvasNode } from "../types/canvas-internal";
 
 export type SpatialDirection = "left" | "right" | "up" | "down";
 
+interface ViewportRect {
+	top: number;
+	right: number;
+	bottom: number;
+	left: number;
+}
+
+export function isRectFullyVisible(rect: ViewportRect, viewport: ViewportRect): boolean {
+	return rect.top >= viewport.top
+		&& rect.right <= viewport.right
+		&& rect.bottom <= viewport.bottom
+		&& rect.left >= viewport.left;
+}
+
 export function findNearestNodeInDirection(
 	origin: CanvasNode,
 	candidates: CanvasNode[],

@@ -7,6 +7,7 @@ import type {
 	NodeSide,
 } from "../types/canvas-internal";
 import { isHtmlElement } from "../ui/dom";
+import { isRectFullyVisible } from "../ui/spatial-navigation";
 
 interface EdgeIndex {
 	/** Edges pointing TO a node (node is target) */
@@ -255,6 +256,22 @@ export class CanvasAPI {
 	 */
 	selectAndZoom(canvas: Canvas, node: CanvasNode, zoomPadding: number): void {
 		canvas.selectOnly(node);
+		this.zoomToNode(canvas, node, zoomPadding);
+	}
+
+	/**
+	 * Select a node without moving the viewport unless it is clipped or off-screen.
+	 */
+	selectAndReveal(canvas: Canvas, node: CanvasNode, zoomPadding: number): void {
+		const isVisible = isRectFullyVisible(
+			node.nodeEl.getBoundingClientRect(),
+			canvas.wrapperEl.getBoundingClientRect()
+		);
+		canvas.selectOnly(node);
+		if (!isVisible) this.zoomToNode(canvas, node, zoomPadding);
+	}
+
+	private zoomToNode(canvas: Canvas, node: CanvasNode, zoomPadding: number): void {
 		if (zoomPadding > 0) {
 			const cx = node.x + node.width / 2;
 			const cy = node.y + node.height / 2;
