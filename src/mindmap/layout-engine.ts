@@ -201,17 +201,21 @@ export class LayoutEngine {
 
 		if (node.children.length === 0) return contour;
 
-		// Layout each child subtree independently at y=0
+		// Keep each child's actual side. A branch can legitimately fork in both
+		// directions below a non-root node.
 		const childSubtrees: SubtreeInfo[] = [];
 		for (const child of node.children) {
 			const childW = child.canvasNode.width || this.config.nodeWidth;
-			const childX = direction === "right"
+			const nodeCenterX = node.canvasNode.x + node.canvasNode.width / 2;
+			const childCenterX = child.canvasNode.x + child.canvasNode.width / 2;
+			const childDirection = childCenterX >= nodeCenterX ? "right" : "left";
+			const childX = childDirection === "right"
 				? nodeX + nodeW + this.config.horizontalGap
 				: nodeX - childW - this.config.horizontalGap;
 
 			const tempPositions = new Map<string, NodePosition>();
 			const childContour = this.layoutSubtree(
-				child, childX, 0, depth + 1, direction, tempPositions
+				child, childX, 0, depth + 1, childDirection, tempPositions
 			);
 			childSubtrees.push({ positions: tempPositions, contour: childContour });
 		}

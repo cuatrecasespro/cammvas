@@ -66,4 +66,40 @@ describe("LayoutEngine.layoutChildren", () => {
 		expect(childA.moveTo).toHaveBeenCalled();
 		expect(childB.moveTo).toHaveBeenCalled();
 	});
+
+	it("preserves children on opposite sides of a non-root branch", () => {
+		const root = node("root", 0, 0);
+		const selected = node("selected", 200, 100);
+		const leftChild = node("left-child", -100, 300);
+		const rightChild = node("right-child", 900, 500);
+		const nodes = new Map([root, selected, leftChild, rightChild].map((item) => [item.id, item]));
+		const edges = new Map([
+			["root-selected", edge("root-selected", root, selected)],
+			["selected-left", edge("selected-left", selected, leftChild)],
+			["selected-right", edge("selected-right", selected, rightChild)],
+		]);
+		const canvas = {
+			nodes,
+			edges,
+			getData: () => ({
+				nodes: Array.from(nodes.values(), (item) => ({
+					id: item.id,
+					type: "text",
+					x: item.x,
+					y: item.y,
+					width: item.width,
+					height: item.height,
+				})),
+				edges: [],
+			}),
+			requestSave: vi.fn(),
+			requestFrame: vi.fn(),
+		} as unknown as Canvas;
+		const engine = new LayoutEngine({ animate: false, horizontalGap: 80, verticalGap: 20 });
+
+		engine.layoutChildren(canvas, selected.id);
+
+		expect(leftChild.x).toBe(20);
+		expect(rightChild.x).toBe(380);
+	});
 });
