@@ -916,6 +916,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 		};
 
 		canvas.requestSave = () => {
+			if (this.isMindmapCanvas(canvas)) {
+				this.branchColors.inheritConnectionColors(canvas);
+			}
 			origSave();
 			this.branchCollapseHandle?.refresh();
 			this.debouncedOutlineRefresh();

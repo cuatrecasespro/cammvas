@@ -37,6 +37,27 @@ export class BranchColors {
 	}
 
 	/**
+	 * Complete colors for connections added directly in Canvas. Existing branch
+	 * colors take precedence, so manually colored branches remain unchanged.
+	 */
+	inheritConnectionColors(canvas: Canvas): boolean {
+		let changed = false;
+		for (const edge of canvas.edges.values()) {
+			const color = edge.from.node.color || this.findIncomingEdge(canvas, edge.from.node)?.color;
+			if (!color) continue;
+			if (!edge.color) {
+				edge.setColor(color);
+				changed = true;
+			}
+			if (!edge.to.node.color) {
+				edge.to.node.setColor(color);
+				changed = true;
+			}
+		}
+		return changed;
+	}
+
+	/**
 	 * Color a single branch (node + all descendants + edges).
 	 */
 	private colorBranch(canvas: Canvas, node: TreeNode, color: string): void {
