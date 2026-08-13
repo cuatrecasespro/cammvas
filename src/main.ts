@@ -314,6 +314,17 @@ export default class CanvasMindMapPlugin extends Plugin {
 			})
 		);
 
+		// Canvas background context menu: create an independent root node.
+		this.registerEvent(
+			this.app.workspace.on("canvas:menu", (menu: Menu, canvas: Canvas) => {
+				if (!this.isMindmapCanvas(canvas)) return;
+				menu.addItem((item) => item
+					.setTitle("Create root node")
+					.setIcon("circle-plus")
+					.onClick(() => this.createRootNode()));
+			})
+		);
+
 		// Node referencing: "Copy node link" in canvas node context menu
 		this.registerEvent(
 			this.app.workspace.on("canvas:node-menu", (menu: Menu, node: CanvasNode) => {
@@ -356,10 +367,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 								this.updateGroupBounds(canvas);
 							});
 					});
-				} else if (
-					this.isMindmapCanvas(canvas)
-					&& this.canvasApi.getChildNodes(canvas, node).length > 0
-				) {
+				} else if (this.isMindmapCanvas(canvas)) {
 					menu.addItem((item) => {
 						item.setTitle("Re-layout selected branch")
 							.setIcon("list-tree")
@@ -1443,12 +1451,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 				.setTitle("Zoom to branch")
 				.setIcon("scan")
 				.onClick(() => this.navigation.zoomToBranch(canvas, selected)));
-			if (this.canvasApi.getChildNodes(canvas, selected).length > 0) {
-				menu.addItem((item) => item
-					.setTitle("Re-layout selected branch")
-					.setIcon("list-tree")
-					.onClick(() => this.relayoutSelectedBranch(canvas, selected)));
-			}
+			menu.addItem((item) => item
+				.setTitle("Re-layout selected branch")
+				.setIcon("list-tree")
+				.onClick(() => this.relayoutSelectedBranch(canvas, selected)));
 		}
 		menu.addItem((item) => item
 			.setTitle("Re-layout mind map")

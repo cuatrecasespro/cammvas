@@ -3,6 +3,7 @@ import { EventRef, ItemView, Menu, WorkspaceLeaf } from "obsidian";
 /** Augment Obsidian's types with undocumented APIs used by this plugin. */
 declare module "obsidian" {
 	interface Workspace {
+		on(name: "canvas:menu", callback: (menu: Menu, canvas: Canvas) => void): EventRef;
 		on(name: "canvas:node-menu", callback: (menu: Menu, node: CanvasNode) => void): EventRef;
 	}
 	interface WorkspaceTabs {
