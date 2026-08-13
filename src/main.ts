@@ -1,4 +1,4 @@
-import { Plugin, Notice, TFile, TFolder, Menu, Platform, debounce, WorkspaceLeaf, setIcon, ItemView } from "obsidian";
+import { Plugin, Notice, TFile, TFolder, Menu, Platform, debounce, WorkspaceLeaf, setIcon, ItemView, addIcon } from "obsidian";
 import type { Canvas, CanvasNode, CanvasEdge, CreateNodeOptions } from "./types/canvas-internal";
 import { CanvasAPI } from "./canvas/canvas-api";
 import { NodeOperations } from "./mindmap/node-operations";
@@ -75,6 +75,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
+		this.registerBranchColorIcons();
 
 		// Initialize core services
 		this.canvasApi = new CanvasAPI(this.app);
@@ -216,10 +217,6 @@ export default class CanvasMindMapPlugin extends Plugin {
 				canvas.removeEdge(edge);
 				this.canvasApi.invalidateEdgeIndex();
 
-				node.setColor("");
-
-				if (this.settings.autoLayout) this.layoutEngine.layoutChildren(canvas, parent.id);
-				if (this.settings.autoColor) this.branchColors.applyColors(canvas);
 				this.updateGroupBounds(canvas);
 				canvas.requestSave();
 			},
@@ -356,8 +353,24 @@ export default class CanvasMindMapPlugin extends Plugin {
 						.setIcon("scan")
 						.onClick(() => this.navigation.zoomToBranch(canvas, node)));
 				}
-
 				const groupIds = getGroupIds(canvas);
+				if (this.isMindmapCanvas(canvas) && !groupIds.has(node.id)) {
+					const branchColors = [
+						["1", "Red"],
+						["2", "Orange"],
+						["3", "Yellow"],
+						["4", "Green"],
+						["5", "Blue"],
+						["6", "Purple"],
+					] as const;
+					for (const [color, label] of branchColors) {
+						menu.addItem((item) => item
+							.setTitle(`Branch color: ${label}`)
+							.setIcon(`cammvas-color-${color}`)
+							.onClick(() => this.branchColors.setBranchColor(canvas, node.id, color)));
+					}
+				}
+
 				if (groupIds.has(node.id)) {
 					menu.addItem((item) => {
 						item.setTitle("Layout forest")
@@ -689,8 +702,6 @@ export default class CanvasMindMapPlugin extends Plugin {
 					changed = this.nodeOps.reparent(canvas, node, newParent) || changed;
 				}
 				if (!changed) return;
-				if (this.settings.autoLayout) this.layoutEngine.layout(canvas);
-				if (this.settings.autoColor) this.branchColors.applyColors(canvas);
 				this.updateGroupBounds(canvas);
 				this.branchCollapseHandle?.refresh();
 			}
@@ -839,7 +850,6 @@ export default class CanvasMindMapPlugin extends Plugin {
 					let root = treeNode;
 					while (root.parent) root = root.parent;
 					this.resizeNodes(canvas, this.collectSubtreeNodes(canvas, root.canvasNode));
-					if (this.settings.autoLayout) this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
 					this.updateGroupBounds(canvas);
 				});
 			}
@@ -852,7 +862,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 					// Guard: skip if canvas changed while waiting
 					if (this.canvasApi.getActiveCanvas() !== canvas) return;
 					this.resizeNodes(canvas, [node]);
-					this.relayoutFromRoot(canvas, node);
+					this.finalizeEdit(canvas);
 				});
 			}
 		};
@@ -1093,15 +1103,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 	}
 
 	/**
-	 * Find the root of the tree containing a node and relayout from there.
+	 * Finalize an edit without overriding manually arranged node positions.
 	 */
-	private relayoutFromRoot(canvas: Canvas, node: import("./types/canvas-internal").CanvasNode): void {
-		const forest = buildForest(canvas);
-		const treeNode = findTreeForNode(forest, node.id);
-		if (!treeNode) return;
-		let root = treeNode;
-		while (root.parent) root = root.parent;
-		if (this.settings.autoLayout) this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
+	private finalizeEdit(canvas: Canvas): void {
 		this.updateGroupBounds(canvas);
 	}
 
@@ -1695,5 +1699,19 @@ export default class CanvasMindMapPlugin extends Plugin {
 		);
 		canvas.requestSave();
 		this.canvasApi.selectAndEdit(canvas, node, this.settings.navigationZoomPadding);
+	}
+
+	private registerBranchColorIcons(): void {
+		const colors: Record<string, string> = {
+			"1": "#e75545",
+			"2": "#e9973f",
+			"3": "#e0de71",
+			"4": "#44cf6e",
+			"5": "#53aaf5",
+			"6": "#a882f7",
+		};
+		for (const [id, color] of Object.entries(colors)) {
+			addIcon(`cammvas-color-${id}`, `<svg viewBox="0 0 24 24" fill="${color}"><circle cx="12" cy="12" r="8"/></svg>`);
+		}
 	}
 }

@@ -116,7 +116,7 @@ export class MindMapSettingTab extends PluginSettingTab {
 
 		return [
 			{ name: "Default mindmap mode", desc: "Whether canvases default to mindmap mode (can be toggled per canvas)", control: { type: "toggle", key: "defaultMindmapMode" } },
-			{ name: "Auto-layout", desc: "Automatically arrange nodes after adding/deleting", control: { type: "toggle", key: "autoLayout" } },
+			{ name: "Auto-layout", desc: "Automatically arrange nodes when Cammvas creates them", control: { type: "toggle", key: "autoLayout" } },
 			{ name: "Auto-color branches", desc: "Assign distinct colors to top-level branches", control: { type: "toggle", key: "autoColor" } },
 			{ name: "Branch color palette", desc: "Comma-separated Canvas colors (1-6) or hex colors, assigned to top-level branches", control: { type: "text", key: "branchPalette", placeholder: "1, 2, 3, 4, 5, 6" } },
 			{ name: "Color leaf nodes", desc: "Turn off to leave terminal nodes neutral while keeping their incoming edge colored", control: { type: "toggle", key: "colorLeafNodes" } },

@@ -129,10 +129,6 @@ export class KeyboardHandler {
 				this.onBeforeLeaveNode?.();
 				const parent = this.nodeOps.deleteAndFocusParent(canvas, node);
 				if (parent) {
-					if (this.autoLayoutEnabled()) this.layoutEngine.layoutChildren(canvas, parent.id);
-					if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {
-						this.branchColors.applyColors(canvas);
-					}
 					this.onNodesChanged(canvas);
 					this.canvasApi.selectAndEdit(canvas, parent, this.zoomPadding);
 				}
@@ -715,10 +711,6 @@ export class KeyboardHandler {
 
 		this.onBeforeLeaveNode?.();
 		if (!this.arrowKeySelectionOnly) {
-			// Explicit navigation commands preserve their existing relayout behavior.
-			let root = treeNode;
-			while (root.parent) root = root.parent;
-			if (this.autoLayoutEnabled()) this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
 			this.onNodesChanged(canvas);
 		}
 		if (this.arrowKeySelectionOnly) {

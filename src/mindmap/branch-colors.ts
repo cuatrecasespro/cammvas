@@ -1,6 +1,6 @@
 import type { Canvas, CanvasNode, CanvasEdge } from "../types/canvas-internal";
 import { CanvasAPI } from "../canvas/canvas-api";
-import { buildForest, TreeNode } from "./tree-model";
+import { buildForest, findTreeForNode, TreeNode } from "./tree-model";
 import { DEFAULT_BRANCH_PALETTE, getBranchNodeColor, normalizePalette } from "./color-palette";
 
 /**
@@ -23,7 +23,6 @@ export class BranchColors {
 	applyColors(canvas: Canvas): void {
 		const forest = buildForest(canvas);
 		if (forest.length === 0) return;
-
 		// Each tree's top-level branches get distinct colors
 		for (const root of forest) {
 			root.children.forEach((child, index) => {
@@ -57,10 +56,25 @@ export class BranchColors {
 		return changed;
 	}
 
+	/** Apply a native Canvas color to this node and its descendants. */
+	setBranchColor(canvas: Canvas, nodeId: string, color: string): void {
+		const forest = buildForest(canvas);
+		const node = findTreeForNode(forest, nodeId);
+		if (!node) return;
+
+		this.colorBranch(canvas, node, color);
+		canvas.requestSave();
+		canvas.requestFrame();
+	}
+
 	/**
 	 * Color a single branch (node + all descendants + edges).
 	 */
-	private colorBranch(canvas: Canvas, node: TreeNode, color: string): void {
+	private colorBranch(
+		canvas: Canvas,
+		node: TreeNode,
+		color: string
+	): void {
 		// A neutral leaf remains visually distinct while its incoming edge
 		// keeps the branch color and still communicates its ancestry.
 		node.canvasNode.setColor(getBranchNodeColor(color, node.children.length, this.colorLeafNodes));

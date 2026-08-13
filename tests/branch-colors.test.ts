@@ -34,4 +34,32 @@ describe("BranchColors.inheritConnectionColors", () => {
 		expect(connection.setColor).not.toHaveBeenCalled();
 		expect(child.setColor).not.toHaveBeenCalled();
 	});
+
+	it("applies a native Canvas color to a complete branch", () => {
+		const root = { ...node("root"), x: 0, y: 0, width: 100, height: 50 };
+		const child = { ...node("child"), x: 200, y: 0, width: 100, height: 50 };
+		const connection = edge(root, child);
+		const data = {
+			nodes: [
+				{ id: "root", type: "text" as const, x: 0, y: 0, width: 100, height: 50 },
+				{ id: "child", type: "text" as const, x: 200, y: 0, width: 100, height: 50 },
+			],
+			edges: [],
+		};
+		const canvas = {
+			nodes: new Map([["root", root], ["child", child]]),
+			edges: new Map([["root-child", connection]]),
+			getData: () => data,
+			requestSave: vi.fn(),
+			requestFrame: vi.fn(),
+		} as unknown as Canvas;
+		const colors = new BranchColors({
+			getConnectedEdges: () => [connection],
+		} as never);
+
+		colors.setBranchColor(canvas, "child", "4");
+
+		expect(child.setColor).toHaveBeenCalledWith("4");
+		expect(connection.setColor).toHaveBeenCalledWith("4");
+	});
 });
