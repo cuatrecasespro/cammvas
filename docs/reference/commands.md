@@ -66,4 +66,4 @@ All commands are available from the command palette (`Ctrl/Cmd+P`). Search for "
 Cammvas includes a physical-key fallback for non-Latin keyboard layouts. See [Working with RTL content](/broken/pages/T0FxqT2PDsBShPB5TUm4).
 {% endhint %}
 
-When **Mind mapping Enter and Tab** is enabled, plain `Enter` creates a sibling while editing, `Tab` creates a child from the selected node, and `Shift + Enter` inserts a line break. Double-click empty Canvas space to create a root. Node creation commands have no default hotkeys but can be customized under **Settings > Hotkeys**.
+When **Mind mapping Enter and Tab** is enabled, plain `Enter` starts editing a selected node or creates a sibling while editing, `Tab` creates a child from the selected node, and `Shift + Enter` inserts a line break. Double-click empty Canvas space to create a root. Node creation commands have no default hotkeys but can be customized under **Settings > Hotkeys**.

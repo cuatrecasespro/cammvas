@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { shouldCreateChildOnTab, shouldCreateSiblingOnEnter } from "../src/ui/editing-enter";
+import {
+	shouldCreateChildOnTab,
+	shouldCreateSiblingOnEnter,
+	shouldStartEditingOnEnter,
+} from "../src/ui/editing-enter";
 
 function enterEvent(overrides: Partial<Parameters<typeof shouldCreateSiblingOnEnter>[0]> = {}) {
 	return {
@@ -26,6 +30,18 @@ describe("shouldCreateSiblingOnEnter", () => {
 		expect(shouldCreateSiblingOnEnter(enterEvent(), false, true)).toBe(false);
 		expect(shouldCreateSiblingOnEnter(enterEvent(), true, false)).toBe(false);
 		expect(shouldCreateSiblingOnEnter(enterEvent({ isComposing: true }), true, true)).toBe(false);
+	});
+});
+
+describe("shouldStartEditingOnEnter", () => {
+	it("handles plain Enter on a selected node when enabled", () => {
+		expect(shouldStartEditingOnEnter(enterEvent(), true, false)).toBe(true);
+	});
+
+	it("does not interfere while editing, when disabled, or with modifiers", () => {
+		expect(shouldStartEditingOnEnter(enterEvent(), true, true)).toBe(false);
+		expect(shouldStartEditingOnEnter(enterEvent(), false, false)).toBe(false);
+		expect(shouldStartEditingOnEnter(enterEvent({ shiftKey: true }), true, false)).toBe(false);
 	});
 });
 

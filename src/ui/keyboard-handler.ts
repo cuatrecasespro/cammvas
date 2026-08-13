@@ -14,7 +14,11 @@ import {
 	TreeNode,
 } from "../mindmap/tree-model";
 import { findNearestNodeInDirection, SpatialDirection } from "./spatial-navigation";
-import { shouldCreateChildOnTab, shouldCreateSiblingOnEnter } from "./editing-enter";
+import {
+	shouldCreateChildOnTab,
+	shouldCreateSiblingOnEnter,
+	shouldStartEditingOnEnter,
+} from "./editing-enter";
 import { isNodeEditorFocused } from "./editing-state";
 
 /**
@@ -367,12 +371,16 @@ export class KeyboardHandler {
 		this.canvasApi.selectAndEdit(canvas, newNode, this.zoomPadding, options.immediateEdit);
 	}
 
-	handleEditingEnter(canvas: Canvas, event: KeyboardEvent): boolean {
+	handleEnter(canvas: Canvas, event: KeyboardEvent): boolean {
 		const node = this.canvasApi.getSelectedNode(canvas);
 		if (!node || !this.isMindmapEnabled(canvas)) return false;
-		if (!shouldCreateSiblingOnEnter(event, this.enterCreatesSiblingEnabled(), node.isEditing)) {
-			return false;
+		if (shouldStartEditingOnEnter(event, this.enterCreatesSiblingEnabled(), node.isEditing)) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			node.startEditing();
+			return true;
 		}
+		if (!shouldCreateSiblingOnEnter(event, this.enterCreatesSiblingEnabled(), node.isEditing)) return false;
 
 		const executeCommand = this.getCommandExecutor();
 		if (!executeCommand) return false;
@@ -444,7 +452,7 @@ export class KeyboardHandler {
 		this.registerCanvasKeyOverride(
 			canvas,
 			"Enter",
-			(event) => this.handleEditingEnter(canvas, event)
+			(event) => this.handleEnter(canvas, event)
 		);
 		this.registerCanvasKeyOverride(
 			canvas,

@@ -22,6 +22,21 @@ export function shouldCreateSiblingOnEnter(
 		&& !event.isComposing;
 }
 
+export function shouldStartEditingOnEnter(
+	event: EditingEnterEvent,
+	enabled: boolean,
+	isEditing: boolean
+): boolean {
+	return enabled
+		&& !isEditing
+		&& event.key === "Enter"
+		&& !event.shiftKey
+		&& !event.ctrlKey
+		&& !event.altKey
+		&& !event.metaKey
+		&& !event.isComposing;
+}
+
 export function shouldCreateChildOnTab(
 	event: EditingEnterEvent,
 	enabled: boolean,

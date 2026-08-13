@@ -32,7 +32,7 @@ All behavior can be configured under **Settings > Cammvas**.
 
 ## Keyboard Workflow
 
-When **Mind mapping Enter and Tab** is enabled, plain `Enter` creates a sibling while editing, plain `Tab` creates a child, `Shift + Enter` inserts a line break, and arrow keys navigate between nodes.
+When **Mind mapping Enter and Tab** is enabled, plain `Enter` starts editing a selected node or creates a sibling while editing, plain `Tab` creates a child, `Shift + Enter` inserts a line break, and arrow keys navigate between nodes.
 
 Cammvas does not assign default hotkeys to **Add child node**, **Add sibling node**, or **Create root node**. All commands remain available from the command palette and can be assigned custom hotkeys under **Settings > Hotkeys**.
 
