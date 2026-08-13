@@ -1,7 +1,7 @@
 {
 	"id": "cammvas",
 	"name": "Cammvas",
-	"version": "1.2.4",
+	"version": "1.2.5",
 	"minAppVersion": "1.13.4",
 	"description": "Bring dedicated mind-mapping workflows to Canvas with branch drag-and-drop, collapsible trees, familiar hotkeys, automatic layout, and an outline.",
 	"author": "cuatrecasespro",

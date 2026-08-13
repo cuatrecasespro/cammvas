@@ -702,6 +702,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 					changed = this.nodeOps.reparent(canvas, node, newParent) || changed;
 				}
 				if (!changed) return;
+				if (this.settings.autoLayout) this.layoutEngine.layout(canvas);
 				this.updateGroupBounds(canvas);
 				this.branchCollapseHandle?.refresh();
 			}
