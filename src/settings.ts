@@ -11,7 +11,9 @@ export interface MindMapSettings {
 	arrowKeyNavigation: boolean;
 	centerNodeOnArrowNavigation: boolean;
 	dragToReparent: boolean;
+	autoLayoutOnReparent: boolean;
 	enterCreatesSibling: boolean;
+	edgeLabelFontSize: number;
 	horizontalGap: number;
 	verticalGap: number;
 	defaultNodeWidth: number;
@@ -30,7 +32,9 @@ export const DEFAULT_SETTINGS: MindMapSettings = {
 	arrowKeyNavigation: true,
 	centerNodeOnArrowNavigation: false,
 	dragToReparent: true,
+	autoLayoutOnReparent: true,
 	enterCreatesSibling: true,
+	edgeLabelFontSize: 14,
 	horizontalGap: 80,
 	verticalGap: 20,
 	defaultNodeWidth: 300,
@@ -48,6 +52,7 @@ const BOOLEAN_SETTING_KEYS = [
 	"arrowKeyNavigation",
 	"centerNodeOnArrowNavigation",
 	"dragToReparent",
+	"autoLayoutOnReparent",
 	"enterCreatesSibling",
 	"defaultMindmapMode",
 	"mouseNavigation",
@@ -59,6 +64,7 @@ const POSITIVE_NUMBER_SETTING_KEYS = [
 	"defaultNodeWidth",
 	"defaultNodeHeight",
 	"maxNodeHeight",
+	"edgeLabelFontSize",
 ] as const;
 
 function isSettingsData(value: unknown): value is Record<string, unknown> {
@@ -120,9 +126,11 @@ export class MindMapSettingTab extends PluginSettingTab {
 			{ name: "Auto-color branches", desc: "Assign distinct colors to top-level branches", control: { type: "toggle", key: "autoColor" } },
 			{ name: "Branch color palette", desc: "Comma-separated Canvas colors (1-6) or hex colors, assigned to top-level branches", control: { type: "text", key: "branchPalette", placeholder: "1, 2, 3, 4, 5, 6" } },
 			{ name: "Color leaf nodes", desc: "Turn off to leave terminal nodes neutral while keeping their incoming edge colored", control: { type: "toggle", key: "colorLeafNodes" } },
+			{ name: "Edge label font size", desc: "Font size of the text label on connection arrows (px)", control: positiveNumber("edgeLabelFontSize") },
 			{ name: "Arrow key navigation", desc: "Navigate between selected mind map nodes with the arrow keys; disable to move Canvas cards natively", control: { type: "toggle", key: "arrowKeyNavigation" } },
 			{ name: "Center node during arrow navigation", desc: "Always center the selected node when navigating with the arrow keys instead of moving the viewport only when needed", control: { type: "toggle", key: "centerNodeOnArrowNavigation" } },
 			{ name: "Drag to reparent", desc: Platform.isMobile ? "Long-press and drag a node onto another node to make it a child while preserving its branch" : "Drop a node onto another node to make it a child while preserving its branch", control: { type: "toggle", key: "dragToReparent" } },
+			{ name: "Auto-layout after reparent", desc: "Automatically arrange the subtree after dragging a node onto a new parent", control: { type: "toggle", key: "autoLayoutOnReparent" } },
 			{ name: "Mind mapping Enter and Tab", desc: Platform.isMobile ? "Use Enter and Tab from a hardware keyboard to create sibling and child nodes" : "Enter creates a sibling while editing, Tab creates a child, and Shift+Enter inserts a new line", control: { type: "toggle", key: "enterCreatesSibling" } },
 			{ name: "Horizontal gap", desc: "Space between parent and child nodes (px)", control: positiveNumber("horizontalGap") },
 			{ name: "Vertical gap", desc: "Space between sibling nodes (px)", control: positiveNumber("verticalGap") },

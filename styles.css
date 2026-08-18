@@ -1,5 +1,10 @@
 /* Cammvas Plugin Styles */
 
+/* Edge label font size */
+.canvas-edge-label {
+	font-size: var(--cammvas-edge-label-font-size) !important;
+}
+
 /* Mindmap mode toggle button in canvas toolbar */
 .cammvas-toggle-btn {
 	color: var(--text-muted);

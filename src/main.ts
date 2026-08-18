@@ -673,6 +673,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 			return;
 		}
 
+		// Apply edge label font size CSS variable
+		canvas.wrapperEl.style.setProperty("--cammvas-edge-label-font-size", `${this.settings.edgeLabelFontSize}px`);
+
 		// Register after Canvas so Cammvas takes precedence over native node nudging.
 		this.keyboardHandler.registerArrowKeyNavigation(canvas);
 
@@ -702,7 +705,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 					changed = this.nodeOps.reparent(canvas, node, newParent) || changed;
 				}
 				if (!changed) return;
-				if (this.settings.autoLayout) this.layoutEngine.layout(canvas);
+				if (this.settings.autoLayoutOnReparent) this.layoutEngine.layout(canvas);
 				this.updateGroupBounds(canvas);
 				this.branchCollapseHandle?.refresh();
 			}
@@ -1648,7 +1651,12 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.updateDragReparentButton();
 		this.updateEnterTabButton();
 
+		// Update edge label font size CSS variable
 		const canvas = this.canvasApi.getActiveCanvas();
+		if (canvas) {
+			canvas.wrapperEl.style.setProperty("--cammvas-edge-label-font-size", `${this.settings.edgeLabelFontSize}px`);
+		}
+
 		if (canvas && this.settings.autoColor && this.isMindmapCanvas(canvas)) {
 			this.branchColors.applyColors(canvas);
 		}
