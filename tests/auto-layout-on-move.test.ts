@@ -120,6 +120,51 @@ describe("registerAutoLayoutOnMove", () => {
 		expect(onSettled).not.toHaveBeenCalled();
 	});
 
+	it("skips a node that was reparented during the drag, leaving it to drag-to-reparent", () => {
+		const { canvas, canvasApi, nodes, selection, parents } = setup();
+		const dragged = node("child");
+		const oldParent = node("old-parent");
+		const newParent = node("new-parent");
+		nodes.set(dragged.id, dragged);
+		selection.add(dragged);
+		parents.set(dragged.id, oldParent);
+		const onSettled = vi.fn();
+
+		registerAutoLayoutOnMove(canvas, canvasApi, () => true, onSettled);
+		const handler = canvas.handleSelectionDrag!({} as PointerEvent, {} as HTMLElement, dragged);
+		handler!.move?.({} as PointerEvent);
+		// Simulate drag-to-reparent having changed the node's parent by the
+		// time the drag ends (it runs its own logic inside the original end).
+		parents.set(dragged.id, newParent);
+		handler!.end?.({ type: "pointerup" } as PointerEvent);
+
+		expect(onSettled).not.toHaveBeenCalled();
+	});
+
+	it("still snaps back siblings whose parent did not change, alongside a reparented one", () => {
+		const { canvas, canvasApi, nodes, selection, parents } = setup();
+		const reparented = node("reparented");
+		const stationary = node("stationary");
+		const oldParent = node("old-parent");
+		const newParent = node("new-parent");
+		nodes.set(reparented.id, reparented);
+		nodes.set(stationary.id, stationary);
+		selection.add(reparented);
+		selection.add(stationary);
+		parents.set(reparented.id, oldParent);
+		parents.set(stationary.id, oldParent);
+		const onSettled = vi.fn();
+
+		registerAutoLayoutOnMove(canvas, canvasApi, () => true, onSettled);
+		const handler = canvas.handleSelectionDrag!({} as PointerEvent, {} as HTMLElement, undefined);
+		handler!.move?.({} as PointerEvent);
+		parents.set(reparented.id, newParent);
+		handler!.end?.({ type: "pointerup" } as PointerEvent);
+
+		expect(onSettled).toHaveBeenCalledTimes(1);
+		expect(onSettled).toHaveBeenCalledWith(new Set([oldParent.id]));
+	});
+
 	it("still invokes the original drag handler's move/end callbacks", () => {
 		const originalMove = vi.fn();
 		const originalEnd = vi.fn();

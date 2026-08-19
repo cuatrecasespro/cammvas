@@ -8,8 +8,12 @@ import { getGroupIds } from "../mindmap/tree-model";
  * the mind map structure after a manual reposition.
  *
  * Only triggers when the pointer actually moved during the drag (a plain
- * click/selection is not treated as a move), and only for nodes that have
- * a parent (root nodes have no fixed "slot" to snap back to).
+ * click/selection is not treated as a move), only for nodes that have a
+ * parent (root nodes have no fixed "slot" to snap back to), and only for
+ * nodes that kept the SAME parent throughout the drag. A node that was
+ * reparented (e.g. via drag-to-reparent) is skipped here — that feature
+ * already handles its own layout and coloring, and re-running layout on
+ * top of it can interfere with edge/color assignment.
  */
 export function registerAutoLayoutOnMove(
 	canvas: Canvas,
@@ -26,6 +30,17 @@ export function registerAutoLayoutOnMove(
 		dragEl: HTMLElement,
 		directNode?: CanvasNode
 	): CanvasDragHandler | void {
+		const groupIds = getGroupIds(canvas);
+		const draggedNodes = directNode && !canvas.selection.has(directNode)
+			? [directNode]
+			: Array.from(canvas.selection)
+				.map((item) => canvas.nodes.get(item.id))
+				.filter((node): node is CanvasNode => !!node && !groupIds.has(node.id));
+		const beforeParentIds = new Map<string, string | null>();
+		for (const node of draggedNodes) {
+			beforeParentIds.set(node.id, canvasApi.getParentNode(canvas, node)?.id ?? null);
+		}
+
 		const handler = original.call(this, event, dragEl, directNode);
 		if (!handler) return handler;
 
@@ -42,16 +57,14 @@ export function registerAutoLayoutOnMove(
 				originalEnd?.call(handler, endEvent);
 			} finally {
 				if (moved && isEnabled()) {
-					const groupIds = getGroupIds(canvas);
-					const draggedNodes = directNode && !canvas.selection.has(directNode)
-						? [directNode]
-						: Array.from(canvas.selection)
-							.map((item) => canvas.nodes.get(item.id))
-							.filter((node): node is CanvasNode => !!node && !groupIds.has(node.id));
 					const parentIds = new Set<string>();
 					for (const node of draggedNodes) {
-						const parent = canvasApi.getParentNode(canvas, node);
-						if (parent) parentIds.add(parent.id);
+						const current = canvas.nodes.get(node.id);
+						if (!current) continue;
+						const parent = canvasApi.getParentNode(canvas, current);
+						if (!parent) continue;
+						if (beforeParentIds.get(node.id) !== parent.id) continue;
+						parentIds.add(parent.id);
 					}
 					if (parentIds.size > 0) onSettled(parentIds);
 				}
