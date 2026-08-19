@@ -12,6 +12,7 @@ export interface MindMapSettings {
 	centerNodeOnArrowNavigation: boolean;
 	dragToReparent: boolean;
 	autoLayoutOnReparent: boolean;
+	autoLayoutOnEdit: boolean;
 	enterCreatesSibling: boolean;
 	edgeLabelFontSize: number;
 	horizontalGap: number;
@@ -33,6 +34,7 @@ export const DEFAULT_SETTINGS: MindMapSettings = {
 	centerNodeOnArrowNavigation: false,
 	dragToReparent: true,
 	autoLayoutOnReparent: true,
+	autoLayoutOnEdit: false,
 	enterCreatesSibling: true,
 	edgeLabelFontSize: 14,
 	horizontalGap: 80,
@@ -53,6 +55,7 @@ const BOOLEAN_SETTING_KEYS = [
 	"centerNodeOnArrowNavigation",
 	"dragToReparent",
 	"autoLayoutOnReparent",
+	"autoLayoutOnEdit",
 	"enterCreatesSibling",
 	"defaultMindmapMode",
 	"mouseNavigation",
@@ -131,6 +134,7 @@ export class MindMapSettingTab extends PluginSettingTab {
 			{ name: "Center node during arrow navigation", desc: "Always center the selected node when navigating with the arrow keys instead of moving the viewport only when needed", control: { type: "toggle", key: "centerNodeOnArrowNavigation" } },
 			{ name: "Drag to reparent", desc: Platform.isMobile ? "Long-press and drag a node onto another node to make it a child while preserving its branch" : "Drop a node onto another node to make it a child while preserving its branch", control: { type: "toggle", key: "dragToReparent" } },
 			{ name: "Auto-layout after reparent", desc: "Automatically arrange the subtree after dragging a node onto a new parent", control: { type: "toggle", key: "autoLayoutOnReparent" } },
+			{ name: "Auto-layout on manual edits", desc: "Also re-arrange the subtree after editing text, deleting, or detaching a node — not just when Cammvas creates nodes", control: { type: "toggle", key: "autoLayoutOnEdit" } },
 			{ name: "Mind mapping Enter and Tab", desc: Platform.isMobile ? "Use Enter and Tab from a hardware keyboard to create sibling and child nodes" : "Enter creates a sibling while editing, Tab creates a child, and Shift+Enter inserts a new line", control: { type: "toggle", key: "enterCreatesSibling" } },
 			{ name: "Horizontal gap", desc: "Space between parent and child nodes (px)", control: positiveNumber("horizontalGap") },
 			{ name: "Vertical gap", desc: "Space between sibling nodes (px)", control: positiveNumber("verticalGap") },

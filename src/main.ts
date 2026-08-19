@@ -46,6 +46,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private interceptedCanvas: Canvas | null = null;
 	private toggleBtnEl: HTMLElement | null = null;
 	private dragReparentBtnEl: HTMLElement | null = null;
+	private autoLayoutOnEditBtnEl: HTMLElement | null = null;
 	private enterTabBtnEl: HTMLElement | null = null;
 	private mobileActionsBtnEl: HTMLElement | null = null;
 	private mobileEditingBarHandle: MobileEditingBarHandle | null = null;
@@ -107,6 +108,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.branchColors,
 			() => this.settings.autoColor,
 			() => this.settings.autoLayout,
+			() => this.settings.autoLayoutOnEdit,
 			() => this.settings.arrowKeyNavigation,
 			() => this.settings.centerNodeOnArrowNavigation,
 			() => this.settings.enterCreatesSibling,
@@ -217,6 +219,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				canvas.removeEdge(edge);
 				this.canvasApi.invalidateEdgeIndex();
 
+				if (this.settings.autoLayoutOnEdit) this.layoutEngine.layoutChildren(canvas, parent.id);
 				this.updateGroupBounds(canvas);
 				canvas.requestSave();
 			},
@@ -567,6 +570,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.dragReparentBtnEl.remove();
 			this.dragReparentBtnEl = null;
 		}
+		if (this.autoLayoutOnEditBtnEl) {
+			this.autoLayoutOnEditBtnEl.remove();
+			this.autoLayoutOnEditBtnEl = null;
+		}
 		if (this.enterTabBtnEl) {
 			this.enterTabBtnEl.remove();
 			this.enterTabBtnEl = null;
@@ -660,6 +667,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			if (this.dragReparentBtnEl) {
 				this.dragReparentBtnEl.remove();
 				this.dragReparentBtnEl = null;
+			}
+			if (this.autoLayoutOnEditBtnEl) {
+				this.autoLayoutOnEditBtnEl.remove();
+				this.autoLayoutOnEditBtnEl = null;
 			}
 			if (this.enterTabBtnEl) {
 				this.enterTabBtnEl.remove();
@@ -854,6 +865,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 					let root = treeNode;
 					while (root.parent) root = root.parent;
 					this.resizeNodes(canvas, this.collectSubtreeNodes(canvas, root.canvasNode));
+					if (this.settings.autoLayoutOnEdit) this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
 					this.updateGroupBounds(canvas);
 				});
 			}
@@ -866,7 +878,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 					// Guard: skip if canvas changed while waiting
 					if (this.canvasApi.getActiveCanvas() !== canvas) return;
 					this.resizeNodes(canvas, [node]);
-					this.finalizeEdit(canvas);
+					this.finalizeEdit(canvas, node);
 				});
 			}
 		};
@@ -1107,9 +1119,19 @@ export default class CanvasMindMapPlugin extends Plugin {
 	}
 
 	/**
-	 * Finalize an edit without overriding manually arranged node positions.
+	 * Finalize an edit. By default, preserves manually arranged node positions.
+	 * When autoLayoutOnEdit is enabled, re-arranges the edited node's tree.
 	 */
-	private finalizeEdit(canvas: Canvas): void {
+	private finalizeEdit(canvas: Canvas, node: CanvasNode): void {
+		if (this.settings.autoLayoutOnEdit) {
+			const forest = buildForest(canvas);
+			const treeNode = findTreeForNode(forest, node.id);
+			if (treeNode) {
+				let root = treeNode;
+				while (root.parent) root = root.parent;
+				this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
+			}
+		}
 		this.updateGroupBounds(canvas);
 	}
 
@@ -1358,6 +1380,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 
 		this.updateToggleButton(canvas);
 		this.updateDragReparentButton(canvas);
+		this.updateAutoLayoutOnEditButton(canvas);
 		this.updateEnterTabButton(canvas);
 		this.updateMobileActionsButton(canvas);
 		this.mobileEditingBarHandle?.refresh();
@@ -1372,6 +1395,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (this.dragReparentBtnEl) {
 			this.dragReparentBtnEl.remove();
 			this.dragReparentBtnEl = null;
+		}
+		if (this.autoLayoutOnEditBtnEl) {
+			this.autoLayoutOnEditBtnEl.remove();
+			this.autoLayoutOnEditBtnEl = null;
 		}
 		if (this.enterTabBtnEl) {
 			this.enterTabBtnEl.remove();
@@ -1410,6 +1437,17 @@ export default class CanvasMindMapPlugin extends Plugin {
 		btn.after(dragBtn);
 		this.dragReparentBtnEl = dragBtn;
 
+		const autoLayoutOnEditBtn = controls.createEl('button', { attr: { type: 'button' } });
+		autoLayoutOnEditBtn.addClass('cammvas-toggle-btn', 'cammvas-auto-layout-on-edit-btn', 'clickable-icon');
+		this.registerDomEvent(autoLayoutOnEditBtn, 'click', (e) => {
+			e.stopPropagation();
+			this.settings.autoLayoutOnEdit = !this.settings.autoLayoutOnEdit;
+			this.updateAutoLayoutOnEditButton(canvas);
+			void this.saveSettings();
+		});
+		dragBtn.after(autoLayoutOnEditBtn);
+		this.autoLayoutOnEditBtnEl = autoLayoutOnEditBtn;
+
 		if (Platform.isMobile) {
 			const actionsBtn = controls.createEl('button', { attr: { type: 'button' } });
 			actionsBtn.addClass('cammvas-toggle-btn', 'cammvas-mobile-actions-btn', 'clickable-icon');
@@ -1419,7 +1457,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				event.stopPropagation();
 				this.showMobileActionsMenu(canvas, actionsBtn);
 			});
-			dragBtn.after(actionsBtn);
+			autoLayoutOnEditBtn.after(actionsBtn);
 			this.mobileActionsBtnEl = actionsBtn;
 		} else {
 			const enterTabBtn = controls.createEl('button', { attr: { type: 'button' } });
@@ -1430,12 +1468,13 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.updateEnterTabButton(canvas);
 				void this.saveSettings();
 			});
-			dragBtn.after(enterTabBtn);
+			autoLayoutOnEditBtn.after(enterTabBtn);
 			this.enterTabBtnEl = enterTabBtn;
 		}
 
 		this.updateToggleButton(canvas);
 		this.updateDragReparentButton(canvas);
+		this.updateAutoLayoutOnEditButton(canvas);
 		this.updateEnterTabButton(canvas);
 		this.updateMobileActionsButton(canvas);
 	}
@@ -1508,6 +1547,23 @@ export default class CanvasMindMapPlugin extends Plugin {
 			!mindmapEnabled
 				? 'Drag to reparent (requires mindmap mode)'
 				: isActive ? 'Drag to reparent (active)' : 'Drag to reparent (inactive)'
+		);
+	}
+
+	private updateAutoLayoutOnEditButton(canvas = this.canvasApi.getActiveCanvas()): void {
+		if (!this.autoLayoutOnEditBtnEl) return;
+		const controlEnabled = !!canvas && this.isMindmapCanvas(canvas);
+		const isActive = controlEnabled && this.settings.autoLayoutOnEdit;
+		this.autoLayoutOnEditBtnEl.empty();
+		setIcon(this.autoLayoutOnEditBtnEl, 'layout-grid');
+		this.autoLayoutOnEditBtnEl.toggleClass('is-active', isActive);
+		this.autoLayoutOnEditBtnEl.toggleAttribute('disabled', !controlEnabled);
+		this.autoLayoutOnEditBtnEl.setAttribute('aria-disabled', String(!controlEnabled));
+		this.autoLayoutOnEditBtnEl.setAttribute(
+			'aria-label',
+			!controlEnabled
+				? 'Auto-layout on manual edits (requires mindmap mode)'
+				: isActive ? 'Auto-layout on manual edits (active)' : 'Auto-layout on manual edits (inactive)'
 		);
 	}
 

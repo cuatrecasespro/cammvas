@@ -41,6 +41,7 @@ export class KeyboardHandler {
 		public branchColors: BranchColors,
 		private autoColorEnabled: () => boolean,
 		private autoLayoutEnabled: () => boolean,
+		private autoLayoutOnEditEnabled: () => boolean,
 		private arrowKeyNavigationEnabled: () => boolean,
 		private centerNodeOnArrowNavigation: () => boolean,
 		private enterCreatesSiblingEnabled: () => boolean,
@@ -129,6 +130,7 @@ export class KeyboardHandler {
 				this.onBeforeLeaveNode?.();
 				const parent = this.nodeOps.deleteAndFocusParent(canvas, node);
 				if (parent) {
+					if (this.autoLayoutOnEditEnabled()) this.layoutEngine.layoutChildren(canvas, parent.id);
 					this.onNodesChanged(canvas);
 					this.canvasApi.selectAndEdit(canvas, parent, this.zoomPadding);
 				}
