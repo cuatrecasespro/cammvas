@@ -8,10 +8,13 @@
 /* Mindmap mode toggle button in canvas toolbar */
 .cammvas-toggle-btn {
 	color: var(--text-muted);
+	background-color: var(--background-secondary);
+	box-shadow: var(--shadow-s);
 }
 
 .cammvas-toggle-btn:not(:disabled):hover {
 	color: var(--text-normal);
+	background-color: var(--background-modifier-hover);
 }
 
 .cammvas-toggle-btn.is-active {
