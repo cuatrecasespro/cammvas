@@ -17,6 +17,7 @@ import { registerDragEndHandler } from "./canvas/edge-updater";
 import { registerSubtreeDragHandler } from "./canvas/subtree-drag";
 import { registerDragReparent } from "./canvas/drag-reparent";
 import { registerGroupDragHandler } from "./canvas/group-drag";
+import { registerAutoLayoutOnMove } from "./canvas/auto-layout-on-move";
 import { registerBranchCollapse, BranchCollapseHandle } from "./canvas/branch-collapse";
 import { registerAutoResize, AutoResizeHandle, getEditorElements } from "./ui/auto-resize";
 import { OutlineView, OUTLINE_VIEW_TYPE } from "./ui/outline-view";
@@ -41,6 +42,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private cleanupSubtreeDragHandler: (() => void) | null = null;
 	private cleanupDragReparentHandler: (() => void) | null = null;
 	private cleanupGroupDragHandler: (() => void) | null = null;
+	private cleanupAutoLayoutOnMoveHandler: (() => void) | null = null;
 	private autoResizeHandle: AutoResizeHandle | null = null;
 	private branchCollapseHandle: BranchCollapseHandle | null = null;
 	private interceptedCanvas: Canvas | null = null;
@@ -528,6 +530,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.cleanupDragReparentHandler();
 			this.cleanupDragReparentHandler = null;
 		}
+		if (this.cleanupAutoLayoutOnMoveHandler) {
+			this.cleanupAutoLayoutOnMoveHandler();
+			this.cleanupAutoLayoutOnMoveHandler = null;
+		}
 		if (this.cleanupGroupDragHandler) {
 			this.cleanupGroupDragHandler();
 			this.cleanupGroupDragHandler = null;
@@ -613,6 +619,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (this.cleanupDragReparentHandler) {
 			this.cleanupDragReparentHandler();
 			this.cleanupDragReparentHandler = null;
+		}
+		if (this.cleanupAutoLayoutOnMoveHandler) {
+			this.cleanupAutoLayoutOnMoveHandler();
+			this.cleanupAutoLayoutOnMoveHandler = null;
 		}
 		if (this.cleanupGroupDragHandler) {
 			this.cleanupGroupDragHandler();
@@ -717,6 +727,21 @@ export default class CanvasMindMapPlugin extends Plugin {
 				}
 				if (!changed) return;
 				if (this.settings.autoLayoutOnReparent) this.layoutEngine.layout(canvas);
+				this.updateGroupBounds(canvas);
+				this.branchCollapseHandle?.refresh();
+			}
+		);
+
+		// Snap a manually dragged node (and its subtree) back into its
+		// auto-layout slot once released, when enabled.
+		this.cleanupAutoLayoutOnMoveHandler = registerAutoLayoutOnMove(
+			canvas,
+			this.canvasApi,
+			() => this.settings.autoLayoutOnEdit && this.isMindmapCanvas(canvas),
+			(parentIds) => {
+				for (const parentId of parentIds) {
+					this.layoutEngine.layoutChildren(canvas, parentId);
+				}
 				this.updateGroupBounds(canvas);
 				this.branchCollapseHandle?.refresh();
 			}
