@@ -1,7 +1,7 @@
 /* Cammvas Plugin Styles */
 
 /* Edge label font size */
-.canvas-edge-label {
+.canvas-path-label {
 	font-size: var(--cammvas-edge-label-font-size) !important;
 }
 
