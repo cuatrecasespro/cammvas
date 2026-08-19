@@ -18,7 +18,12 @@
 }
 
 .cammvas-toggle-btn.is-active {
-	color: var(--interactive-accent);
+	color: var(--text-on-accent) !important;
+	background-color: var(--interactive-accent) !important;
+}
+
+.cammvas-toggle-btn.is-active:not(:disabled):hover {
+	background-color: var(--interactive-accent-hover) !important;
 }
 
 .cammvas-toggle-btn:disabled {
