@@ -285,7 +285,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				if (!canvas || !this.isMindmapCanvas(canvas) || canvas.nodes.size === 0) return false;
 				if (checking) return true;
 				if (!this.exportMindmapPdf(canvas)) {
-					new Notice("Unable to open the PDF export window. Allow pop-ups and try again.");
+					new Notice("Unable to prepare the PDF export.");
 				}
 			},
 		});
@@ -346,7 +346,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 					.setDisabled(canvas.nodes.size === 0)
 					.onClick(() => {
 						if (!this.exportMindmapPdf(canvas)) {
-							new Notice("Unable to open the PDF export window. Allow pop-ups and try again.");
+							new Notice("Unable to prepare the PDF export.");
 						}
 					}));
 			})
@@ -425,7 +425,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 						.setIcon("file-down")
 						.onClick(() => {
 							if (!this.exportMindmapPdf(canvas)) {
-								new Notice("Unable to open the PDF export window. Allow pop-ups and try again.");
+								new Notice("Unable to prepare the PDF export.");
 							}
 						}));
 				}
@@ -1526,7 +1526,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.registerDomEvent(exportPdfBtn, 'click', (event) => {
 			event.stopPropagation();
 			if (!this.exportMindmapPdf(canvas)) {
-				new Notice("Unable to open the PDF export window. Allow pop-ups and try again.");
+				new Notice("Unable to prepare the PDF export.");
 			}
 		});
 		autoLayoutOnEditBtn.after(exportPdfBtn);
@@ -1605,7 +1605,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			.setDisabled(!isMindmap || canvas.nodes.size === 0)
 			.onClick(() => {
 				if (!this.exportMindmapPdf(canvas)) {
-					new Notice("Unable to open the PDF export window. Allow pop-ups and try again.");
+					new Notice("Unable to prepare the PDF export.");
 				}
 			}));
 		menu.addItem((item) => item

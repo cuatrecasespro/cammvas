@@ -131,18 +131,25 @@ export function createMindmapSvg(canvas: Canvas): string | null {
 	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${width}" height="${height}" role="img" aria-label="Mind map export"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker><style>.edge{fill:none;stroke-width:2.5}.edge-label{font:14px sans-serif;fill:#4b5563;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}.node{fill:#fff;stroke-width:3}.node-label{font:15px sans-serif;fill:#1f2937}</style></defs><rect x="${bounds.minX - PADDING}" y="${bounds.minY - PADDING}" width="${width}" height="${height}" fill="#fff"/>${edgeMarkup}${nodeMarkup}</svg>`;
 }
 
-/** Open the native print dialog; selecting "Save as PDF" preserves SVG vectors. */
+/** Open the native print dialog without relying on a popup; SVG stays vector-sharp. */
 export function printMindmapPdf(canvas: Canvas, title: string): boolean {
 	const svg = createMindmapSvg(canvas);
 	if (!svg) return false;
-	const printWindow = canvas.wrapperEl.win.open("", "_blank", "width=1200,height=900");
-	if (!printWindow) return false;
-	printWindow.opener = null;
-	printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeXml(title)}</title><style>@page{margin:12mm}html,body{margin:0;background:#fff}body{padding:0}svg{display:block;width:100%;height:auto}</style></head><body>${svg}</body></html>`);
-	printWindow.document.close();
-	printWindow.setTimeout(() => {
+	const doc = canvas.wrapperEl.ownerDocument;
+	const iframe = doc.createElement("iframe");
+	iframe.setAttribute("aria-hidden", "true");
+	iframe.style.cssText = "position:fixed;width:0;height:0;border:0;visibility:hidden";
+	iframe.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeXml(title)}</title><style>@page{margin:12mm}html,body{margin:0;background:#fff}body{padding:0}svg{display:block;width:100%;height:auto}</style></head><body>${svg}</body></html>`;
+	iframe.addEventListener("load", () => {
+		const printWindow = iframe.contentWindow;
+		if (!printWindow) {
+			iframe.remove();
+			return;
+		}
 		printWindow.focus();
 		printWindow.print();
-	}, 100);
+		canvas.wrapperEl.win.setTimeout(() => iframe.remove(), 1_000);
+	}, { once: true });
+	doc.body.appendChild(iframe);
 	return true;
 }
