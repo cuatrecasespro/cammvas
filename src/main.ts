@@ -50,6 +50,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private toggleBtnEl: HTMLElement | null = null;
 	private dragReparentBtnEl: HTMLElement | null = null;
 	private autoLayoutOnEditBtnEl: HTMLElement | null = null;
+	private exportPdfBtnEl: HTMLElement | null = null;
 	private enterTabBtnEl: HTMLElement | null = null;
 	private mobileActionsBtnEl: HTMLElement | null = null;
 	private mobileEditingBarHandle: MobileEditingBarHandle | null = null;
@@ -415,8 +416,18 @@ export default class CanvasMindMapPlugin extends Plugin {
 							.setIcon("list-tree")
 							.onClick(() => {
 								this.relayoutSelectedBranch(canvas, node);
-							});
+						});
 					});
+				}
+				if (this.isMindmapCanvas(canvas)) {
+					menu.addItem((item) => item
+						.setTitle("Export as high-quality PDF")
+						.setIcon("file-down")
+						.onClick(() => {
+							if (!this.exportMindmapPdf(canvas)) {
+								new Notice("Unable to open the PDF export window. Allow pop-ups and try again.");
+							}
+						}));
 				}
 			})
 		);
@@ -604,6 +615,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.autoLayoutOnEditBtnEl.remove();
 			this.autoLayoutOnEditBtnEl = null;
 		}
+		if (this.exportPdfBtnEl) {
+			this.exportPdfBtnEl.remove();
+			this.exportPdfBtnEl = null;
+		}
 		if (this.enterTabBtnEl) {
 			this.enterTabBtnEl.remove();
 			this.enterTabBtnEl = null;
@@ -705,6 +720,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			if (this.autoLayoutOnEditBtnEl) {
 				this.autoLayoutOnEditBtnEl.remove();
 				this.autoLayoutOnEditBtnEl = null;
+			}
+			if (this.exportPdfBtnEl) {
+				this.exportPdfBtnEl.remove();
+				this.exportPdfBtnEl = null;
 			}
 			if (this.enterTabBtnEl) {
 				this.enterTabBtnEl.remove();
@@ -1430,6 +1449,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.updateToggleButton(canvas);
 		this.updateDragReparentButton(canvas);
 		this.updateAutoLayoutOnEditButton(canvas);
+		this.updateExportPdfButton(canvas);
 		this.updateEnterTabButton(canvas);
 		this.updateMobileActionsButton(canvas);
 		this.mobileEditingBarHandle?.refresh();
@@ -1448,6 +1468,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (this.autoLayoutOnEditBtnEl) {
 			this.autoLayoutOnEditBtnEl.remove();
 			this.autoLayoutOnEditBtnEl = null;
+		}
+		if (this.exportPdfBtnEl) {
+			this.exportPdfBtnEl.remove();
+			this.exportPdfBtnEl = null;
 		}
 		if (this.enterTabBtnEl) {
 			this.enterTabBtnEl.remove();
@@ -1497,6 +1521,17 @@ export default class CanvasMindMapPlugin extends Plugin {
 		dragBtn.after(autoLayoutOnEditBtn);
 		this.autoLayoutOnEditBtnEl = autoLayoutOnEditBtn;
 
+		const exportPdfBtn = controls.createEl('button', { attr: { type: 'button' } });
+		exportPdfBtn.addClass('cammvas-toggle-btn', 'cammvas-export-pdf-btn', 'clickable-icon');
+		this.registerDomEvent(exportPdfBtn, 'click', (event) => {
+			event.stopPropagation();
+			if (!this.exportMindmapPdf(canvas)) {
+				new Notice("Unable to open the PDF export window. Allow pop-ups and try again.");
+			}
+		});
+		autoLayoutOnEditBtn.after(exportPdfBtn);
+		this.exportPdfBtnEl = exportPdfBtn;
+
 		if (Platform.isMobile) {
 			const actionsBtn = controls.createEl('button', { attr: { type: 'button' } });
 			actionsBtn.addClass('cammvas-toggle-btn', 'cammvas-mobile-actions-btn', 'clickable-icon');
@@ -1506,7 +1541,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				event.stopPropagation();
 				this.showMobileActionsMenu(canvas, actionsBtn);
 			});
-			autoLayoutOnEditBtn.after(actionsBtn);
+			exportPdfBtn.after(actionsBtn);
 			this.mobileActionsBtnEl = actionsBtn;
 		} else {
 			const enterTabBtn = controls.createEl('button', { attr: { type: 'button' } });
@@ -1517,13 +1552,14 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.updateEnterTabButton(canvas);
 				void this.saveSettings();
 			});
-			autoLayoutOnEditBtn.after(enterTabBtn);
+			exportPdfBtn.after(enterTabBtn);
 			this.enterTabBtnEl = enterTabBtn;
 		}
 
 		this.updateToggleButton(canvas);
 		this.updateDragReparentButton(canvas);
 		this.updateAutoLayoutOnEditButton(canvas);
+		this.updateExportPdfButton(canvas);
 		this.updateEnterTabButton(canvas);
 		this.updateMobileActionsButton(canvas);
 	}
@@ -1627,6 +1663,19 @@ export default class CanvasMindMapPlugin extends Plugin {
 			!controlEnabled
 				? 'Auto-layout on manual edits (requires mindmap mode)'
 				: isActive ? 'Auto-layout on manual edits (active)' : 'Auto-layout on manual edits (inactive)'
+		);
+	}
+
+	private updateExportPdfButton(canvas = this.canvasApi.getActiveCanvas()): void {
+		if (!this.exportPdfBtnEl) return;
+		const enabled = !!canvas && this.isMindmapCanvas(canvas) && canvas.nodes.size > 0;
+		this.exportPdfBtnEl.empty();
+		setIcon(this.exportPdfBtnEl, "file-down");
+		this.exportPdfBtnEl.toggleAttribute("disabled", !enabled);
+		this.exportPdfBtnEl.setAttribute("aria-disabled", String(!enabled));
+		this.exportPdfBtnEl.setAttribute(
+			"aria-label",
+			enabled ? "Export as high-quality PDF" : "Export PDF (requires a non-empty mindmap)"
 		);
 	}
 
@@ -1769,6 +1818,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		}
 		this.updateDragReparentButton();
 		this.updateAutoLayoutOnEditButton();
+		this.updateExportPdfButton();
 		this.updateEnterTabButton();
 
 		// Update edge label font size CSS variable
