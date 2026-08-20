@@ -1,10 +1,9 @@
-import { App, Modal, Notice, Setting, TFolder } from "obsidian";
+import { App, Modal, Notice, Setting } from "obsidian";
 import type { PdfPageSize } from "./pdf-export";
 
 export class PdfExportModal extends Modal {
 	private fileName: string;
 	private folder = "Cammvas Exports";
-	private newFolder = "";
 	private pageSize: PdfPageSize = "a4";
 
 	constructor(
@@ -27,29 +26,17 @@ export class PdfExportModal extends Modal {
 				text.onChange((value) => this.fileName = value);
 			});
 
-		const folders = this.app.vault.getAllLoadedFiles()
-			.filter((file): file is TFolder => file instanceof TFolder)
-			.map((folder) => folder.path)
-			.filter((path) => path && path !== "Cammvas Exports")
-			.sort((a, b) => a.localeCompare(b));
 		new Setting(this.contentEl)
 			.setName("Save in")
-			.addDropdown((dropdown) => {
-				dropdown.addOption("Cammvas Exports", "Cammvas Exports");
-				dropdown.addOption("", "Vault root");
-				for (const folder of folders) dropdown.addOption(folder, folder);
-				dropdown.setValue(this.folder);
-				dropdown.onChange((value) => this.folder = value);
+			.setDesc("Folder path in the vault. It is created automatically when needed; leave empty for the vault root.")
+			.addText((text) => {
+				text.setValue(this.folder);
+				text.onChange((value) => this.folder = value);
 			});
 
 		new Setting(this.contentEl)
-			.setName("New folder")
-			.setDesc("Optional. Creates this folder in the vault and saves the PDF there.")
-			.addText((text) => text.onChange((value) => this.newFolder = value));
-
-		new Setting(this.contentEl)
 			.setName("Page size")
-			.setDesc("A4 and A3 fit the whole map on one page. Full size preserves the map's natural dimensions.")
+			.setDesc("Fixed paper sizes fit the whole map on one page. Full size preserves the map's natural dimensions.")
 			.addDropdown((dropdown) => {
 				dropdown.addOption("a4", "A4 (auto orientation)");
 				dropdown.addOption("a3", "A3 (auto orientation)");
@@ -67,7 +54,7 @@ export class PdfExportModal extends Modal {
 				return;
 			}
 			this.close();
-			this.onExport(fileName, this.newFolder.trim() || this.folder, this.pageSize);
+			this.onExport(fileName, this.folder.trim(), this.pageSize);
 		});
 	}
 

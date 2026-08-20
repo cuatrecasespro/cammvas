@@ -1,6 +1,6 @@
 {
 	"name": "cammvas",
-	"version": "1.2.18",
+	"version": "1.2.19",
 	"description": "Dedicated mind-mapping workflows inside Obsidian Canvas",
 	"main": "main.js",
 	"scripts": {
@@ -35,7 +35,6 @@
 		"vitest": "^4.1.10"
 	},
 	"dependencies": {
-		"jspdf": "^4.2.1",
-		"svg2pdf.js": "^2.7.0"
+		"pdf-lib": "^1.17.1"
 	}
 }

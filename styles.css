@@ -1,8 +1,8 @@
 /* Cammvas Plugin Styles */
 
 /* Edge label font size */
-.canvas-path-label {
-	font-size: var(--cammvas-edge-label-font-size) !important;
+.canvas-wrapper .canvas-path-label {
+	font-size: var(--cammvas-edge-label-font-size);
 }
 
 /* Mindmap mode toggle button in canvas toolbar */
@@ -17,13 +17,13 @@
 	background-color: var(--background-modifier-hover);
 }
 
-.cammvas-toggle-btn.is-active {
-	color: var(--text-on-accent) !important;
-	background-color: var(--interactive-accent) !important;
+.canvas-controls .cammvas-toggle-btn.is-active {
+	color: var(--text-on-accent);
+	background-color: var(--interactive-accent);
 }
 
-.cammvas-toggle-btn.is-active:not(:disabled):hover {
-	background-color: var(--interactive-accent-hover) !important;
+.canvas-controls .cammvas-toggle-btn.is-active:not(:disabled):hover {
+	background-color: var(--interactive-accent-hover);
 }
 
 .cammvas-toggle-btn:disabled {

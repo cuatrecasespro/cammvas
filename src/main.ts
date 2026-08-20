@@ -1638,7 +1638,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				outputPath = `${folder ? `${folder}/` : ""}${safeName} ${index++}.pdf`;
 			}
 			await this.app.vault.createBinary(outputPath, pdf);
-			new Notice(`PDF exported to ${outputPath}`);
+			new Notice(`PDF exported (${pageSize.toUpperCase()}) to ${outputPath}`);
 		} catch (error) {
 			console.error("Cammvas PDF export failed", error);
 			new Notice("Unable to export the PDF. Check the developer console for details.");
@@ -1923,15 +1923,15 @@ export default class CanvasMindMapPlugin extends Plugin {
 	}
 
 	private registerBranchColorIcons(): void {
-		const colors: Record<string, string> = {
-			"1": "#e75545",
-			"2": "#e9973f",
-			"3": "#e0de71",
-			"4": "#44cf6e",
-			"5": "#53aaf5",
-			"6": "#a882f7",
-		};
-		for (const [id, color] of Object.entries(colors)) {
+		const colors = [
+			["1", "#e75545"],
+			["2", "#e9973f"],
+			["3", "#e0de71"],
+			["4", "#44cf6e"],
+			["5", "#53aaf5"],
+			["6", "#a882f7"],
+		] as const;
+		for (const [id, color] of colors) {
 			addIcon(`cammvas-color-${id}`, `<svg viewBox="0 0 24 24" fill="${color}"><circle cx="12" cy="12" r="8"/></svg>`);
 		}
 	}

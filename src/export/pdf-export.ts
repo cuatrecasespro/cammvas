@@ -1,6 +1,5 @@
 import type { Canvas, CanvasEdge, CanvasNode, NodeSide } from "../types/canvas-internal";
-import { jsPDF } from "jspdf";
-import { svg2pdf } from "svg2pdf.js";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 const NODE_COLORS: Record<string, string> = {
 	"1": "#e75545",
@@ -29,6 +28,7 @@ export type PdfPageSize = "a4" | "a3" | "full";
 export interface PdfPageLayout {
 	pageWidth: number;
 	pageHeight: number;
+	orientation: "portrait" | "landscape";
 	scale: number;
 	x: number;
 	y: number;
@@ -42,7 +42,16 @@ export function getPdfPageLayout(
 ): PdfPageLayout {
 	if (pageSize === "full") {
 		const scale = 0.75;
-		return { pageWidth: contentWidth * scale, pageHeight: contentHeight * scale, scale, x: 0, y: 0 };
+		const pageWidth = contentWidth * scale;
+		const pageHeight = contentHeight * scale;
+		return {
+			pageWidth,
+			pageHeight,
+			orientation: pageWidth > pageHeight ? "landscape" : "portrait",
+			scale,
+			x: 0,
+			y: 0,
+		};
 	}
 	const paper = pageSize === "a3" ? A3_PORTRAIT : A4_PORTRAIT;
 	const landscape = contentWidth > contentHeight;
@@ -55,6 +64,7 @@ export function getPdfPageLayout(
 	return {
 		pageWidth,
 		pageHeight,
+		orientation: landscape ? "landscape" : "portrait",
 		scale,
 		x: (pageWidth - contentWidth * scale) / 2,
 		y: (pageHeight - contentHeight * scale) / 2,
@@ -122,9 +132,82 @@ function canvasBounds(nodes: Iterable<CanvasNode>): Bounds | null {
 
 function imageFormat(path: string): string | null {
 	const extension = path.split(".").pop()?.toUpperCase();
-	if (extension === "JPG" || extension === "JPEG") return "JPEG";
-	if (extension === "PNG" || extension === "WEBP") return extension;
+	if (extension === "JPG" || extension === "JPEG") return "jpeg";
+	if (extension === "PNG" || extension === "WEBP") return extension.toLowerCase();
 	return null;
+}
+
+function toPdfColor(color: string): ReturnType<typeof rgb> {
+	const hex = nodeColor(color).slice(1);
+	return rgb(
+		parseInt(hex.slice(0, 2), 16) / 255,
+		parseInt(hex.slice(2, 4), 16) / 255,
+		parseInt(hex.slice(4, 6), 16) / 255
+	);
+}
+
+function toPdfPoint(
+	pageHeight: number,
+	layout: PdfPageLayout,
+	bounds: Bounds,
+	x: number,
+	y: number
+): { x: number; y: number } {
+	return {
+		x: layout.x + (x - bounds.minX + PADDING) * layout.scale,
+		y: pageHeight - layout.y - (y - bounds.minY + PADDING) * layout.scale,
+	};
+}
+
+function pdfEdgePath(edge: CanvasEdge, pageHeight: number, layout: PdfPageLayout, bounds: Bounds): string {
+	const from = anchor(edge.from.node, edge.from.side);
+	const to = anchor(edge.to.node, edge.to.side);
+	const distance = Math.max(40, Math.abs(to.x - from.x) * 0.45, Math.abs(to.y - from.y) * 0.2);
+	const cp1 = controlPoint(from, edge.from.side, distance);
+	const cp2 = controlPoint(to, edge.to.side, distance);
+	const start = toPdfPoint(pageHeight, layout, bounds, from.x, from.y);
+	const firstControl = toPdfPoint(pageHeight, layout, bounds, cp1.x, cp1.y);
+	const secondControl = toPdfPoint(pageHeight, layout, bounds, cp2.x, cp2.y);
+	const end = toPdfPoint(pageHeight, layout, bounds, to.x, to.y);
+	return `M ${start.x} ${start.y} C ${firstControl.x} ${firstControl.y}, ${secondControl.x} ${secondControl.y}, ${end.x} ${end.y}`;
+}
+
+function arrowPath(edge: CanvasEdge, pageHeight: number, layout: PdfPageLayout, bounds: Bounds): string {
+	const to = anchor(edge.to.node, edge.to.side);
+	const distance = Math.max(40, Math.abs(to.x - edge.from.node.x) * 0.45);
+	const control = controlPoint(to, edge.to.side, distance);
+	const tip = toPdfPoint(pageHeight, layout, bounds, to.x, to.y);
+	const tail = toPdfPoint(pageHeight, layout, bounds, control.x, control.y);
+	const dx = tip.x - tail.x;
+	const dy = tip.y - tail.y;
+	const length = Math.hypot(dx, dy) || 1;
+	const size = 8 * layout.scale;
+	const baseX = tip.x - (dx / length) * size;
+	const baseY = tip.y - (dy / length) * size;
+	const perpendicularX = (-dy / length) * size * 0.55;
+	const perpendicularY = (dx / length) * size * 0.55;
+	return `M ${tip.x} ${tip.y} L ${baseX + perpendicularX} ${baseY + perpendicularY} L ${baseX - perpendicularX} ${baseY - perpendicularY} Z`;
+}
+
+async function webpToPng(data: Uint8Array): Promise<Uint8Array | null> {
+	const blob = new Blob([data], { type: "image/webp" });
+	const url = URL.createObjectURL(blob);
+	try {
+		const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+			const element = new Image();
+			element.onload = () => resolve(element);
+			element.onerror = () => reject(new Error("Unable to decode WebP image"));
+			element.src = url;
+		});
+		const canvas = createEl("canvas");
+		canvas.width = image.naturalWidth;
+		canvas.height = image.naturalHeight;
+		canvas.getContext("2d")?.drawImage(image, 0, 0);
+		const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+		return png ? new Uint8Array(await png.arrayBuffer()) : null;
+	} finally {
+		URL.revokeObjectURL(url);
+	}
 }
 
 function textLines(text: string, width: number): string[] {
@@ -188,8 +271,6 @@ export async function createMindmapPdf(
 	resolveImage: ImageDataResolver,
 	pageSize: PdfPageSize = "a4"
 ): Promise<ArrayBuffer | null> {
-	const svg = createMindmapSvg(canvas);
-	if (!svg) return null;
 	const nodes = Array.from(canvas.nodes.values()).filter((node) => node.type !== "group");
 	const bounds = canvasBounds(nodes);
 	if (!bounds) return null;
@@ -197,33 +278,83 @@ export async function createMindmapPdf(
 	const width = bounds.maxX - bounds.minX + PADDING * 2;
 	const height = bounds.maxY - bounds.minY + PADDING * 2;
 	const layout = getPdfPageLayout(width, height, pageSize);
-	const pdf = new jsPDF({
-		unit: "pt",
-		format: [layout.pageWidth, layout.pageHeight],
-		compress: true,
-	});
-	pdf.setProperties({ title });
-	const parser = new DOMParser();
-	const svgElement = parser.parseFromString(svg, "image/svg+xml").documentElement;
-	await svg2pdf(svgElement, pdf, {
-		x: layout.x,
-		y: layout.y,
-		width: width * layout.scale,
-		height: height * layout.scale,
-	});
+	const pdf = await PDFDocument.create();
+	pdf.setTitle(title);
+	const page = pdf.addPage([layout.pageWidth, layout.pageHeight]);
+	const font = await pdf.embedFont(StandardFonts.Helvetica);
+	const pageHeight = layout.pageHeight;
+
+	for (const edge of canvas.edges.values()) {
+		if (!nodes.includes(edge.from.node) || !nodes.includes(edge.to.node)) continue;
+		const color = toPdfColor(edge.color || edge.from.node.color);
+		page.drawSvgPath(pdfEdgePath(edge, pageHeight, layout, bounds), {
+			borderColor: color,
+			borderWidth: 2.5 * layout.scale,
+		});
+		if (edge.to.end === "arrow") {
+			page.drawSvgPath(arrowPath(edge, pageHeight, layout, bounds), { color });
+		}
+		if (edge.label?.trim()) {
+			const from = anchor(edge.from.node, edge.from.side);
+			const to = anchor(edge.to.node, edge.to.side);
+			const point = toPdfPoint(pageHeight, layout, bounds, (from.x + to.x) / 2, (from.y + to.y) / 2 - 6);
+			const label = edge.label.trim().replace(/[^\x20-\xFF]/g, "?");
+			const fontSize = 14 * layout.scale;
+			page.drawText(label, {
+				x: point.x - font.widthOfTextAtSize(label, fontSize) / 2,
+				y: point.y,
+				size: fontSize,
+				font,
+				color: rgb(0.29, 0.33, 0.39),
+			});
+		}
+	}
+
+	for (const node of nodes) {
+		const topLeft = toPdfPoint(pageHeight, layout, bounds, node.x, node.y);
+		const nodeWidth = node.width * layout.scale;
+		const nodeHeight = node.height * layout.scale;
+		page.drawRectangle({
+			x: topLeft.x,
+			y: topLeft.y - nodeHeight,
+			width: nodeWidth,
+			height: nodeHeight,
+			borderColor: toPdfColor(node.color),
+			borderWidth: 3 * layout.scale,
+			color: rgb(1, 1, 1),
+		});
+		if (node.type === "file") continue;
+		const lines = textLines(nodeText(node), node.width - 28);
+		const lineHeight = 18 * layout.scale;
+		const startY = topLeft.y - nodeHeight / 2 + ((lines.length - 1) * lineHeight) / 2 - 6 * layout.scale;
+		for (let index = 0; index < lines.length; index++) {
+			page.drawText(lines[index].replace(/[^\x20-\xFF]/g, "?"), {
+				x: topLeft.x + 14 * layout.scale,
+				y: startY - index * lineHeight,
+				size: 15 * layout.scale,
+				font,
+				color: rgb(0.12, 0.15, 0.18),
+			});
+		}
+	}
 
 	const filePaths = new Map(canvas.getData().nodes.map((node) => [node.id, node.file]));
 	for (const node of nodes) {
 		if (node.type !== "file") continue;
 		const path = filePaths.get(node.id);
 		if (!path) continue;
-		const format = imageFormat(path);
+		let format = imageFormat(path);
 		if (!format) continue;
 		const data = await resolveImage(path);
 		if (!data) continue;
 		try {
-			const properties = pdf.getImageProperties(data);
-			const imageRatio = properties.width / properties.height;
+			const imageData = format === "webp" ? await webpToPng(data) : data;
+			if (!imageData) continue;
+			if (format === "webp") format = "png";
+			const image = format === "png"
+				? await pdf.embedPng(imageData)
+				: await pdf.embedJpg(imageData);
+			const imageRatio = image.width / image.height;
 			const nodeRatio = node.width / node.height;
 			const inset = 6;
 			const imageWidth = nodeRatio > imageRatio
@@ -234,20 +365,19 @@ export async function createMindmapPdf(
 				: (node.width - inset * 2) / imageRatio;
 			const x = node.x - bounds.minX + PADDING + (node.width - imageWidth) / 2;
 			const y = node.y - bounds.minY + PADDING + (node.height - imageHeight) / 2;
-			pdf.addImage(
-				data,
-				format,
-				layout.x + x * layout.scale,
-				layout.y + y * layout.scale,
-				imageWidth * layout.scale,
-				imageHeight * layout.scale,
-				node.id,
-				"FAST"
-			);
+			page.drawImage(image, {
+				x: layout.x + x * layout.scale,
+				y: pageHeight - layout.y - y * layout.scale - imageHeight * layout.scale,
+				width: imageWidth * layout.scale,
+				height: imageHeight * layout.scale,
+			});
 		} catch {
 			// Unsupported or corrupt image: leave the vector node placeholder intact.
 		}
 	}
 
-	return pdf.output("arraybuffer");
+	const bytes = await pdf.save();
+	const copy = new Uint8Array(bytes.length);
+	copy.set(bytes);
+	return copy.buffer;
 }
