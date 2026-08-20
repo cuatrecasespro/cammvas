@@ -1,4 +1,6 @@
 import type { Canvas, CanvasEdge, CanvasNode, NodeSide } from "../types/canvas-internal";
+import { jsPDF } from "jspdf";
+import { svg2pdf } from "svg2pdf.js";
 
 const NODE_COLORS: Record<string, string> = {
 	"1": "#e75545",
@@ -17,6 +19,8 @@ interface Bounds {
 	maxX: number;
 	maxY: number;
 }
+
+export type ImageDataResolver = (path: string) => Promise<Uint8Array | null>;
 
 function escapeXml(value: string): string {
 	return value
@@ -77,6 +81,13 @@ function canvasBounds(nodes: Iterable<CanvasNode>): Bounds | null {
 	return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
 }
 
+function imageFormat(path: string): string | null {
+	const extension = path.split(".").pop()?.toUpperCase();
+	if (extension === "JPG" || extension === "JPEG") return "JPEG";
+	if (extension === "PNG" || extension === "WEBP") return extension;
+	return null;
+}
+
 function textLines(text: string, width: number): string[] {
 	const maxChars = Math.max(12, Math.floor(width / 8));
 	const words = text.split(" ");
@@ -131,25 +142,58 @@ export function createMindmapSvg(canvas: Canvas): string | null {
 	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${width}" height="${height}" role="img" aria-label="Mind map export"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker><style>.edge{fill:none;stroke-width:2.5}.edge-label{font:14px sans-serif;fill:#4b5563;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}.node{fill:#fff;stroke-width:3}.node-label{font:15px sans-serif;fill:#1f2937}</style></defs><rect x="${bounds.minX - PADDING}" y="${bounds.minY - PADDING}" width="${width}" height="${height}" fill="#fff"/>${edgeMarkup}${nodeMarkup}</svg>`;
 }
 
-/** Open the native print dialog without relying on a popup; SVG stays vector-sharp. */
-export function printMindmapPdf(canvas: Canvas, title: string): boolean {
+/** Create a vector PDF and embed local PNG, JPEG, and WebP Canvas file nodes. */
+export async function createMindmapPdf(
+	canvas: Canvas,
+	title: string,
+	resolveImage: ImageDataResolver
+): Promise<ArrayBuffer | null> {
 	const svg = createMindmapSvg(canvas);
-	if (!svg) return false;
-	const doc = canvas.wrapperEl.ownerDocument;
-	const iframe = doc.createElement("iframe");
-	iframe.setAttribute("aria-hidden", "true");
-	iframe.style.cssText = "position:fixed;width:0;height:0;border:0;visibility:hidden";
-	iframe.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeXml(title)}</title><style>@page{margin:12mm}html,body{margin:0;background:#fff}body{padding:0}svg{display:block;width:100%;height:auto}</style></head><body>${svg}</body></html>`;
-	iframe.addEventListener("load", () => {
-		const printWindow = iframe.contentWindow;
-		if (!printWindow) {
-			iframe.remove();
-			return;
+	if (!svg) return null;
+	const nodes = Array.from(canvas.nodes.values()).filter((node) => node.type !== "group");
+	const bounds = canvasBounds(nodes);
+	if (!bounds) return null;
+
+	const width = bounds.maxX - bounds.minX + PADDING * 2;
+	const height = bounds.maxY - bounds.minY + PADDING * 2;
+	const scale = 0.75;
+	const pdf = new jsPDF({
+		unit: "pt",
+		format: [width * scale, height * scale],
+		compress: true,
+	});
+	pdf.setProperties({ title });
+	const parser = new DOMParser();
+	const svgElement = parser.parseFromString(svg, "image/svg+xml").documentElement;
+	await svg2pdf(svgElement, pdf, { width: width * scale, height: height * scale });
+
+	const filePaths = new Map(canvas.getData().nodes.map((node) => [node.id, node.file]));
+	for (const node of nodes) {
+		if (node.type !== "file") continue;
+		const path = filePaths.get(node.id);
+		if (!path) continue;
+		const format = imageFormat(path);
+		if (!format) continue;
+		const data = await resolveImage(path);
+		if (!data) continue;
+		try {
+			const properties = pdf.getImageProperties(data);
+			const imageRatio = properties.width / properties.height;
+			const nodeRatio = node.width / node.height;
+			const inset = 6;
+			const imageWidth = nodeRatio > imageRatio
+				? (node.height - inset * 2) * imageRatio
+				: node.width - inset * 2;
+			const imageHeight = nodeRatio > imageRatio
+				? node.height - inset * 2
+				: (node.width - inset * 2) / imageRatio;
+			const x = node.x - bounds.minX + PADDING + (node.width - imageWidth) / 2;
+			const y = node.y - bounds.minY + PADDING + (node.height - imageHeight) / 2;
+			pdf.addImage(data, format, x * scale, y * scale, imageWidth * scale, imageHeight * scale, node.id, "FAST");
+		} catch {
+			// Unsupported or corrupt image: leave the vector node placeholder intact.
 		}
-		printWindow.focus();
-		printWindow.print();
-		canvas.wrapperEl.win.setTimeout(() => iframe.remove(), 1_000);
-	}, { once: true });
-	doc.body.appendChild(iframe);
-	return true;
+	}
+
+	return pdf.output("arraybuffer");
 }

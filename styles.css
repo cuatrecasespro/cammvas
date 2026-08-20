@@ -32,6 +32,13 @@
 	cursor: not-allowed;
 }
 
+.cammvas-pdf-export-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 20px;
+}
+
 /* Smooth node repositioning animation */
 .canvas-node.mindmap-animating {
 	transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);

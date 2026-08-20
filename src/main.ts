@@ -18,7 +18,8 @@ import { registerSubtreeDragHandler } from "./canvas/subtree-drag";
 import { registerDragReparent } from "./canvas/drag-reparent";
 import { registerGroupDragHandler } from "./canvas/group-drag";
 import { registerAutoLayoutOnMove } from "./canvas/auto-layout-on-move";
-import { printMindmapPdf } from "./export/pdf-export";
+import { createMindmapPdf } from "./export/pdf-export";
+import { PdfExportModal } from "./export/pdf-export-modal";
 import { registerBranchCollapse, BranchCollapseHandle } from "./canvas/branch-collapse";
 import { registerAutoResize, AutoResizeHandle, getEditorElements } from "./ui/auto-resize";
 import { OutlineView, OUTLINE_VIEW_TYPE } from "./ui/outline-view";
@@ -284,9 +285,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				const canvas = this.canvasApi.getActiveCanvas();
 				if (!canvas || !this.isMindmapCanvas(canvas) || canvas.nodes.size === 0) return false;
 				if (checking) return true;
-				if (!this.exportMindmapPdf(canvas)) {
-					new Notice("Unable to prepare the PDF export.");
-				}
+				void this.exportMindmapPdf(canvas);
 			},
 		});
 
@@ -345,9 +344,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 					.setIcon("file-down")
 					.setDisabled(canvas.nodes.size === 0)
 					.onClick(() => {
-						if (!this.exportMindmapPdf(canvas)) {
-							new Notice("Unable to prepare the PDF export.");
-						}
+						void this.exportMindmapPdf(canvas);
 					}));
 			})
 		);
@@ -424,9 +421,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 						.setTitle("Export as high-quality PDF")
 						.setIcon("file-down")
 						.onClick(() => {
-							if (!this.exportMindmapPdf(canvas)) {
-								new Notice("Unable to prepare the PDF export.");
-							}
+							void this.exportMindmapPdf(canvas);
 						}));
 				}
 			})
@@ -1525,9 +1520,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		exportPdfBtn.addClass('cammvas-toggle-btn', 'cammvas-export-pdf-btn', 'clickable-icon');
 		this.registerDomEvent(exportPdfBtn, 'click', (event) => {
 			event.stopPropagation();
-			if (!this.exportMindmapPdf(canvas)) {
-				new Notice("Unable to prepare the PDF export.");
-			}
+			void this.exportMindmapPdf(canvas);
 		});
 		autoLayoutOnEditBtn.after(exportPdfBtn);
 		this.exportPdfBtnEl = exportPdfBtn;
@@ -1604,9 +1597,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			.setIcon("file-down")
 			.setDisabled(!isMindmap || canvas.nodes.size === 0)
 			.onClick(() => {
-				if (!this.exportMindmapPdf(canvas)) {
-					new Notice("Unable to prepare the PDF export.");
-				}
+				void this.exportMindmapPdf(canvas);
 			}));
 		menu.addItem((item) => item
 			.setTitle("Open map outline")
@@ -1616,9 +1607,55 @@ export default class CanvasMindMapPlugin extends Plugin {
 		menu.showAtPosition({ x: rect.left, y: rect.bottom });
 	}
 
-	private exportMindmapPdf(canvas: Canvas): boolean {
+	private exportMindmapPdf(canvas: Canvas): void {
 		const fileName = canvas.view.file.path.split("/").pop()?.replace(/\.canvas$/i, "") || "mindmap";
-		return printMindmapPdf(canvas, fileName);
+		new PdfExportModal(this.app, fileName, (name, folder) => {
+			void this.saveMindmapPdf(canvas, name, folder);
+		}).open();
+	}
+
+	private async saveMindmapPdf(canvas: Canvas, fileName: string, outputFolder: string): Promise<void> {
+		const safeName = fileName.replace(/\.pdf$/i, "").replace(/[\\/:*?"<>|]/g, "-") || "mindmap";
+		try {
+			const pdf = await createMindmapPdf(canvas, safeName, async (path) => {
+				const file = this.app.vault.getAbstractFileByPath(path);
+				if (!(file instanceof TFile)) return null;
+				return new Uint8Array(await this.app.vault.readBinary(file));
+			});
+			if (!pdf) {
+				new Notice("Unable to prepare the PDF export.");
+				return;
+			}
+			const folder = await this.ensureExportFolder(outputFolder);
+			let outputPath = `${folder ? `${folder}/` : ""}${safeName}.pdf`;
+			let index = 2;
+			while (this.app.vault.getAbstractFileByPath(outputPath)) {
+				outputPath = `${folder ? `${folder}/` : ""}${safeName} ${index++}.pdf`;
+			}
+			await this.app.vault.createBinary(outputPath, pdf);
+			new Notice(`PDF exported to ${outputPath}`);
+		} catch (error) {
+			console.error("Cammvas PDF export failed", error);
+			new Notice("Unable to export the PDF. Check the developer console for details.");
+		}
+	}
+
+	private async ensureExportFolder(value: string): Promise<string> {
+		const parts = value.replace(/\\/g, "/").split("/").filter(Boolean);
+		if (parts.some((part) => part === "." || part === "..")) {
+			throw new Error("Invalid export folder path");
+		}
+		let path = "";
+		for (const part of parts) {
+			path = path ? `${path}/${part}` : part;
+			const existing = this.app.vault.getAbstractFileByPath(path);
+			if (!existing) {
+				await this.app.vault.createFolder(path);
+			} else if (!(existing instanceof TFolder)) {
+				throw new Error(`Export folder path is a file: ${path}`);
+			}
+		}
+		return path;
 	}
 
 	private updateToggleButton(canvas: Canvas): void {
