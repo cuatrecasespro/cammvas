@@ -166,6 +166,8 @@ export class MindMapSettingTab extends PluginSettingTab {
 		} else {
 			return;
 		}
-		await this.plugin.saveSettings();
+		await this.plugin.saveSettings(
+			key === "autoColor" || key === "branchPalette" || key === "colorLeafNodes"
+		);
 	}
 }

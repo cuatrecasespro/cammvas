@@ -18,6 +18,7 @@ import { registerSubtreeDragHandler } from "./canvas/subtree-drag";
 import { registerDragReparent } from "./canvas/drag-reparent";
 import { registerGroupDragHandler } from "./canvas/group-drag";
 import { registerAutoLayoutOnMove } from "./canvas/auto-layout-on-move";
+import { printMindmapPdf } from "./export/pdf-export";
 import { registerBranchCollapse, BranchCollapseHandle } from "./canvas/branch-collapse";
 import { registerAutoResize, AutoResizeHandle, getEditorElements } from "./ui/auto-resize";
 import { OutlineView, OUTLINE_VIEW_TYPE } from "./ui/outline-view";
@@ -274,6 +275,20 @@ export default class CanvasMindMapPlugin extends Plugin {
 			},
 		});
 
+		// Command: Export the current map through the native PDF print dialog.
+		this.addCommand({
+			id: "mindmap-export-pdf",
+			name: "Export mind map as high-quality PDF",
+			checkCallback: (checking: boolean) => {
+				const canvas = this.canvasApi.getActiveCanvas();
+				if (!canvas || !this.isMindmapCanvas(canvas) || canvas.nodes.size === 0) return false;
+				if (checking) return true;
+				if (!this.exportMindmapPdf(canvas)) {
+					new Notice("Unable to open the PDF export window. Allow pop-ups and try again.");
+				}
+			},
+		});
+
 		// Command: Toggle mindmap mode for current canvas
 		this.addCommand({
 			id: "mindmap-toggle-mode",
@@ -316,7 +331,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			})
 		);
 
-		// Canvas background context menu: create an independent root node.
+		// Canvas background context menu: create an independent root node or export.
 		this.registerEvent(
 			this.app.workspace.on("canvas:menu", (menu: Menu, canvas: Canvas) => {
 				if (!this.isMindmapCanvas(canvas)) return;
@@ -324,6 +339,15 @@ export default class CanvasMindMapPlugin extends Plugin {
 					.setTitle("Create root node")
 					.setIcon("circle-plus")
 					.onClick(() => this.createRootNode()));
+				menu.addItem((item) => item
+					.setTitle("Export as high-quality PDF")
+					.setIcon("file-down")
+					.setDisabled(canvas.nodes.size === 0)
+					.onClick(() => {
+						if (!this.exportMindmapPdf(canvas)) {
+							new Notice("Unable to open the PDF export window. Allow pop-ups and try again.");
+						}
+					}));
 			})
 		);
 
@@ -526,13 +550,13 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.cleanupSubtreeDragHandler();
 			this.cleanupSubtreeDragHandler = null;
 		}
-		if (this.cleanupDragReparentHandler) {
-			this.cleanupDragReparentHandler();
-			this.cleanupDragReparentHandler = null;
-		}
 		if (this.cleanupAutoLayoutOnMoveHandler) {
 			this.cleanupAutoLayoutOnMoveHandler();
 			this.cleanupAutoLayoutOnMoveHandler = null;
+		}
+		if (this.cleanupDragReparentHandler) {
+			this.cleanupDragReparentHandler();
+			this.cleanupDragReparentHandler = null;
 		}
 		if (this.cleanupGroupDragHandler) {
 			this.cleanupGroupDragHandler();
@@ -616,13 +640,13 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.cleanupSubtreeDragHandler();
 			this.cleanupSubtreeDragHandler = null;
 		}
-		if (this.cleanupDragReparentHandler) {
-			this.cleanupDragReparentHandler();
-			this.cleanupDragReparentHandler = null;
-		}
 		if (this.cleanupAutoLayoutOnMoveHandler) {
 			this.cleanupAutoLayoutOnMoveHandler();
 			this.cleanupAutoLayoutOnMoveHandler = null;
+		}
+		if (this.cleanupDragReparentHandler) {
+			this.cleanupDragReparentHandler();
+			this.cleanupDragReparentHandler = null;
 		}
 		if (this.cleanupGroupDragHandler) {
 			this.cleanupGroupDragHandler();
@@ -1540,11 +1564,25 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.updateGroupBounds(canvas);
 			}));
 		menu.addItem((item) => item
+			.setTitle("Export as high-quality PDF")
+			.setIcon("file-down")
+			.setDisabled(!isMindmap || canvas.nodes.size === 0)
+			.onClick(() => {
+				if (!this.exportMindmapPdf(canvas)) {
+					new Notice("Unable to open the PDF export window. Allow pop-ups and try again.");
+				}
+			}));
+		menu.addItem((item) => item
 			.setTitle("Open map outline")
 			.setIcon("list-tree")
 			.onClick(() => this.showOutline(canvas, true)));
 		const rect = anchor.getBoundingClientRect();
 		menu.showAtPosition({ x: rect.left, y: rect.bottom });
+	}
+
+	private exportMindmapPdf(canvas: Canvas): boolean {
+		const fileName = canvas.view.file.path.split("/").pop()?.replace(/\.canvas$/i, "") || "mindmap";
+		return printMindmapPdf(canvas, fileName);
 	}
 
 	private updateToggleButton(canvas: Canvas): void {
@@ -1700,7 +1738,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.settings = normalizeSettings(data);
 	}
 
-	async saveSettings(): Promise<void> {
+	async saveSettings(refreshBranchColors = false): Promise<void> {
 		await this.saveData(this.settings);
 
 		// Update services with new settings
@@ -1730,6 +1768,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.keyboardHandler.zoomPadding = this.settings.navigationZoomPadding;
 		}
 		this.updateDragReparentButton();
+		this.updateAutoLayoutOnEditButton();
 		this.updateEnterTabButton();
 
 		// Update edge label font size CSS variable
@@ -1738,7 +1777,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			canvas.wrapperEl.style.setProperty("--cammvas-edge-label-font-size", `${this.settings.edgeLabelFontSize}px`);
 		}
 
-		if (canvas && this.settings.autoColor && this.isMindmapCanvas(canvas)) {
+		if (refreshBranchColors && canvas && this.settings.autoColor && this.isMindmapCanvas(canvas)) {
 			this.branchColors.applyColors(canvas);
 		}
 	}
