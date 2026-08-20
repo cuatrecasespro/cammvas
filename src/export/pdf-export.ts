@@ -12,6 +12,9 @@ const NODE_COLORS: Record<string, string> = {
 };
 
 const PADDING = 48;
+const A4_PORTRAIT = { width: 595.28, height: 841.89 };
+const A3_PORTRAIT = { width: 841.89, height: 1190.55 };
+const PDF_MARGIN = 36;
 
 interface Bounds {
 	minX: number;
@@ -21,6 +24,42 @@ interface Bounds {
 }
 
 export type ImageDataResolver = (path: string) => Promise<Uint8Array | null>;
+export type PdfPageSize = "a4" | "a3" | "full";
+
+export interface PdfPageLayout {
+	pageWidth: number;
+	pageHeight: number;
+	scale: number;
+	x: number;
+	y: number;
+}
+
+/** Fit any exported canvas bounds to one A4 page with automatic orientation. */
+export function getPdfPageLayout(
+	contentWidth: number,
+	contentHeight: number,
+	pageSize: PdfPageSize = "a4"
+): PdfPageLayout {
+	if (pageSize === "full") {
+		const scale = 0.75;
+		return { pageWidth: contentWidth * scale, pageHeight: contentHeight * scale, scale, x: 0, y: 0 };
+	}
+	const paper = pageSize === "a3" ? A3_PORTRAIT : A4_PORTRAIT;
+	const landscape = contentWidth > contentHeight;
+	const pageWidth = landscape ? paper.height : paper.width;
+	const pageHeight = landscape ? paper.width : paper.height;
+	const scale = Math.min(
+		(pageWidth - PDF_MARGIN * 2) / contentWidth,
+		(pageHeight - PDF_MARGIN * 2) / contentHeight
+	);
+	return {
+		pageWidth,
+		pageHeight,
+		scale,
+		x: (pageWidth - contentWidth * scale) / 2,
+		y: (pageHeight - contentHeight * scale) / 2,
+	};
+}
 
 function escapeXml(value: string): string {
 	return value
@@ -146,7 +185,8 @@ export function createMindmapSvg(canvas: Canvas): string | null {
 export async function createMindmapPdf(
 	canvas: Canvas,
 	title: string,
-	resolveImage: ImageDataResolver
+	resolveImage: ImageDataResolver,
+	pageSize: PdfPageSize = "a4"
 ): Promise<ArrayBuffer | null> {
 	const svg = createMindmapSvg(canvas);
 	if (!svg) return null;
@@ -156,16 +196,21 @@ export async function createMindmapPdf(
 
 	const width = bounds.maxX - bounds.minX + PADDING * 2;
 	const height = bounds.maxY - bounds.minY + PADDING * 2;
-	const scale = 0.75;
+	const layout = getPdfPageLayout(width, height, pageSize);
 	const pdf = new jsPDF({
 		unit: "pt",
-		format: [width * scale, height * scale],
+		format: [layout.pageWidth, layout.pageHeight],
 		compress: true,
 	});
 	pdf.setProperties({ title });
 	const parser = new DOMParser();
 	const svgElement = parser.parseFromString(svg, "image/svg+xml").documentElement;
-	await svg2pdf(svgElement, pdf, { width: width * scale, height: height * scale });
+	await svg2pdf(svgElement, pdf, {
+		x: layout.x,
+		y: layout.y,
+		width: width * layout.scale,
+		height: height * layout.scale,
+	});
 
 	const filePaths = new Map(canvas.getData().nodes.map((node) => [node.id, node.file]));
 	for (const node of nodes) {
@@ -189,7 +234,16 @@ export async function createMindmapPdf(
 				: (node.width - inset * 2) / imageRatio;
 			const x = node.x - bounds.minX + PADDING + (node.width - imageWidth) / 2;
 			const y = node.y - bounds.minY + PADDING + (node.height - imageHeight) / 2;
-			pdf.addImage(data, format, x * scale, y * scale, imageWidth * scale, imageHeight * scale, node.id, "FAST");
+			pdf.addImage(
+				data,
+				format,
+				layout.x + x * layout.scale,
+				layout.y + y * layout.scale,
+				imageWidth * layout.scale,
+				imageHeight * layout.scale,
+				node.id,
+				"FAST"
+			);
 		} catch {
 			// Unsupported or corrupt image: leave the vector node placeholder intact.
 		}

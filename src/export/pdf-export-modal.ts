@@ -1,14 +1,16 @@
 import { App, Modal, Notice, Setting, TFolder } from "obsidian";
+import type { PdfPageSize } from "./pdf-export";
 
 export class PdfExportModal extends Modal {
 	private fileName: string;
 	private folder = "Cammvas Exports";
 	private newFolder = "";
+	private pageSize: PdfPageSize = "a4";
 
 	constructor(
 		app: App,
 		initialFileName: string,
-		private onExport: (fileName: string, folder: string) => void
+		private onExport: (fileName: string, folder: string, pageSize: PdfPageSize) => void
 	) {
 		super(app);
 		this.fileName = initialFileName;
@@ -45,6 +47,17 @@ export class PdfExportModal extends Modal {
 			.setDesc("Optional. Creates this folder in the vault and saves the PDF there.")
 			.addText((text) => text.onChange((value) => this.newFolder = value));
 
+		new Setting(this.contentEl)
+			.setName("Page size")
+			.setDesc("A4 and A3 fit the whole map on one page. Full size preserves the map's natural dimensions.")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("a4", "A4 (auto orientation)");
+				dropdown.addOption("a3", "A3 (auto orientation)");
+				dropdown.addOption("full", "Full size (one large page)");
+				dropdown.setValue(this.pageSize);
+				dropdown.onChange((value) => this.pageSize = value as PdfPageSize);
+			});
+
 		const actions = this.contentEl.createDiv({ cls: "cammvas-pdf-export-actions" });
 		actions.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.close());
 		actions.createEl("button", { text: "Export PDF", cls: "mod-cta" }).addEventListener("click", () => {
@@ -54,7 +67,7 @@ export class PdfExportModal extends Modal {
 				return;
 			}
 			this.close();
-			this.onExport(fileName, this.newFolder.trim() || this.folder);
+			this.onExport(fileName, this.newFolder.trim() || this.folder, this.pageSize);
 		});
 	}
 

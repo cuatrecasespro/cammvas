@@ -1609,19 +1609,24 @@ export default class CanvasMindMapPlugin extends Plugin {
 
 	private exportMindmapPdf(canvas: Canvas): void {
 		const fileName = canvas.view.file.path.split("/").pop()?.replace(/\.canvas$/i, "") || "mindmap";
-		new PdfExportModal(this.app, fileName, (name, folder) => {
-			void this.saveMindmapPdf(canvas, name, folder);
+		new PdfExportModal(this.app, fileName, (name, folder, pageSize) => {
+			void this.saveMindmapPdf(canvas, name, folder, pageSize);
 		}).open();
 	}
 
-	private async saveMindmapPdf(canvas: Canvas, fileName: string, outputFolder: string): Promise<void> {
+	private async saveMindmapPdf(
+		canvas: Canvas,
+		fileName: string,
+		outputFolder: string,
+		pageSize: import("./export/pdf-export").PdfPageSize
+	): Promise<void> {
 		const safeName = fileName.replace(/\.pdf$/i, "").replace(/[\\/:*?"<>|]/g, "-") || "mindmap";
 		try {
 			const pdf = await createMindmapPdf(canvas, safeName, async (path) => {
 				const file = this.app.vault.getAbstractFileByPath(path);
 				if (!(file instanceof TFile)) return null;
 				return new Uint8Array(await this.app.vault.readBinary(file));
-			});
+			}, pageSize);
 			if (!pdf) {
 				new Notice("Unable to prepare the PDF export.");
 				return;

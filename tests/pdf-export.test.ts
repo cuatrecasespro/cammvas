@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Canvas, CanvasEdge, CanvasNode, NodeSide } from "../src/types/canvas-internal";
-import { createMindmapSvg } from "../src/export/pdf-export";
+import { createMindmapSvg, getPdfPageLayout } from "../src/export/pdf-export";
 
 function node(id: string, x: number, y: number, text: string, color = ""): CanvasNode {
 	return {
@@ -60,5 +60,45 @@ describe("createMindmapSvg", () => {
 		expect(svg).toContain(">Root</text>");
 		expect(svg).not.toContain(">Group</text>");
 		expect(svg).not.toContain("marker-end");
+	});
+});
+
+describe("getPdfPageLayout", () => {
+	it("uses landscape A4 and centers a wide map inside margins", () => {
+		const layout = getPdfPageLayout(2_000, 800, "a4");
+
+		expect(layout.pageWidth).toBeCloseTo(841.89);
+		expect(layout.pageHeight).toBeCloseTo(595.28);
+		expect(layout.x).toBeCloseTo(36);
+		expect(layout.y).toBeGreaterThan(36);
+		expect(2_000 * layout.scale).toBeCloseTo(layout.pageWidth - 72);
+	});
+
+	it("uses portrait A4 and centers a tall map inside margins", () => {
+		const layout = getPdfPageLayout(800, 2_000, "a4");
+
+		expect(layout.pageWidth).toBeCloseTo(595.28);
+		expect(layout.pageHeight).toBeCloseTo(841.89);
+		expect(layout.x).toBeGreaterThan(36);
+		expect(layout.y).toBeCloseTo(36);
+		expect(2_000 * layout.scale).toBeCloseTo(layout.pageHeight - 72);
+	});
+
+	it("uses A3 dimensions when requested", () => {
+		const layout = getPdfPageLayout(2_000, 800, "a3");
+
+		expect(layout.pageWidth).toBeCloseTo(1190.55);
+		expect(layout.pageHeight).toBeCloseTo(841.89);
+		expect(2_000 * layout.scale).toBeCloseTo(layout.pageWidth - 72);
+	});
+
+	it("keeps natural map dimensions on a full-size page", () => {
+		const layout = getPdfPageLayout(2_000, 800, "full");
+
+		expect(layout.pageWidth).toBe(1_500);
+		expect(layout.pageHeight).toBe(600);
+		expect(layout.scale).toBe(0.75);
+		expect(layout.x).toBe(0);
+		expect(layout.y).toBe(0);
 	});
 });
