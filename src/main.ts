@@ -1545,7 +1545,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.updateEnterTabButton(canvas);
 				void this.saveSettings();
 			});
-			exportPdfBtn.after(enterTabBtn);
+			autoLayoutOnEditBtn.after(enterTabBtn);
 			this.enterTabBtnEl = enterTabBtn;
 		}
 
