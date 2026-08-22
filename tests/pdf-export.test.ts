@@ -18,11 +18,14 @@ function edge(from: CanvasNode, to: CanvasNode, fromSide: NodeSide = "right", to
 	} as CanvasEdge;
 }
 
-function canvas(nodes: CanvasNode[], edges: CanvasEdge[] = []): Canvas {
+function canvas(nodes: CanvasNode[], edges: CanvasEdge[] = [], filePaths = new Map<string, string>()): Canvas {
 	return {
 		nodes: new Map(nodes.map((item) => [item.id, item])),
 		edges: new Map(edges.map((item) => [item.id, item])),
-		getData: () => ({ nodes: [], edges: [] }),
+		getData: () => ({
+			nodes: nodes.map((item) => ({ id: item.id, type: item.type, file: filePaths.get(item.id) })),
+			edges: [],
+		}),
 	} as unknown as Canvas;
 }
 
@@ -55,15 +58,26 @@ describe("createMindmapSvg", () => {
 		expect(svg).toContain("A &amp; B");
 	});
 
-	it("excludes group nodes and their edges from the document", () => {
+	it("renders group nodes and their connected edges", () => {
 		const root = node("root", 0, 0, "Root");
 		const group = node("group", 300, 20, "Group");
 		group.type = "group";
 		const svg = createMindmapSvg(canvas([root, group], [edge(root, group)]));
 
 		expect(svg).toContain(">Root</text>");
-		expect(svg).not.toContain(">Group</text>");
-		expect(svg).not.toContain("marker-end");
+		expect(svg).toContain(">Group</text>");
+		expect(svg).toContain("marker-end");
+	});
+
+	it("renders arrowheads at both ends of an edge", () => {
+		const root = node("root", 0, 0, "Root");
+		const child = node("child", 300, 20, "Child");
+		const link = edge(root, child);
+		link.from.end = "arrow";
+		const svg = createMindmapSvg(canvas([root, child], [link]));
+
+		expect(svg).toContain("marker-start=\"url(#arrow)\"");
+		expect(svg).toContain("marker-end=\"url(#arrow)\"");
 	});
 });
 
@@ -119,5 +133,19 @@ describe("createMindmapPdf", () => {
 
 		expect(pdf).not.toBeNull();
 		expect(Array.from(new Uint8Array(pdf!.slice(0, 5)))).toEqual([37, 80, 68, 70, 45]);
+	});
+
+	it("embeds local image file nodes", async () => {
+		const image = node("image", 0, 0, "");
+		image.type = "file";
+		const paths = new Map([[image.id, "assets/image.png"]]);
+		const png = Uint8Array.from(
+			atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9rQAAAABJRU5ErkJggg=="),
+			(character) => character.charCodeAt(0)
+		);
+		const resolveImage = async (path: string) => path === "assets/image.png" ? png : null;
+		const pdf = await createMindmapPdf(canvas([image], [], paths), "Map", resolveImage);
+
+		expect(pdf).not.toBeNull();
 	});
 });

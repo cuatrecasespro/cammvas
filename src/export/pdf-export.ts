@@ -130,10 +130,15 @@ function canvasBounds(nodes: Iterable<CanvasNode>): Bounds | null {
 	return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
 }
 
-function imageFormat(path: string): string | null {
-	const extension = path.split(".").pop()?.toUpperCase();
-	if (extension === "JPG" || extension === "JPEG") return "jpeg";
-	if (extension === "PNG" || extension === "WEBP") return extension.toLowerCase();
+function imageMimeType(path: string): string | null {
+	const extension = path.split(".").pop()?.toLowerCase();
+	if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+	if (extension === "png") return "image/png";
+	if (extension === "webp") return "image/webp";
+	if (extension === "gif") return "image/gif";
+	if (extension === "svg") return "image/svg+xml";
+	if (extension === "bmp") return "image/bmp";
+	if (extension === "avif") return "image/avif";
 	return null;
 }
 
@@ -172,11 +177,19 @@ function pdfEdgePath(edge: CanvasEdge, pageHeight: number, layout: PdfPageLayout
 	return `M ${start.x} ${start.y} C ${firstControl.x} ${firstControl.y}, ${secondControl.x} ${secondControl.y}, ${end.x} ${end.y}`;
 }
 
-function arrowPath(edge: CanvasEdge, pageHeight: number, layout: PdfPageLayout, bounds: Bounds): string {
-	const to = anchor(edge.to.node, edge.to.side);
-	const distance = Math.max(40, Math.abs(to.x - edge.from.node.x) * 0.45);
-	const control = controlPoint(to, edge.to.side, distance);
-	const tip = toPdfPoint(pageHeight, layout, bounds, to.x, to.y);
+function arrowPath(
+	edge: CanvasEdge,
+	end: "from" | "to",
+	pageHeight: number,
+	layout: PdfPageLayout,
+	bounds: Bounds
+): string {
+	const endpoint = edge[end];
+	const point = anchor(endpoint.node, endpoint.side);
+	const other = edge[end === "from" ? "to" : "from"].node;
+	const distance = Math.max(40, Math.abs(point.x - other.x) * 0.45, Math.abs(point.y - other.y) * 0.2);
+	const control = controlPoint(point, endpoint.side, distance);
+	const tip = toPdfPoint(pageHeight, layout, bounds, point.x, point.y);
 	const tail = toPdfPoint(pageHeight, layout, bounds, control.x, control.y);
 	const dx = tip.x - tail.x;
 	const dy = tip.y - tail.y;
@@ -189,14 +202,14 @@ function arrowPath(edge: CanvasEdge, pageHeight: number, layout: PdfPageLayout, 
 	return `M ${tip.x} ${tip.y} L ${baseX + perpendicularX} ${baseY + perpendicularY} L ${baseX - perpendicularX} ${baseY - perpendicularY} Z`;
 }
 
-async function webpToPng(data: Uint8Array): Promise<Uint8Array | null> {
-	const blob = new Blob([data], { type: "image/webp" });
+async function rasterizeImageToPng(data: Uint8Array, mimeType: string): Promise<Uint8Array | null> {
+	const blob = new Blob([data], { type: mimeType });
 	const url = URL.createObjectURL(blob);
 	try {
 		const image = await new Promise<HTMLImageElement>((resolve, reject) => {
 			const element = new Image();
 			element.onload = () => resolve(element);
-			element.onerror = () => reject(new Error("Unable to decode WebP image"));
+			element.onerror = () => reject(new Error("Unable to decode image"));
 			element.src = url;
 		});
 		const canvas = createEl("canvas");
@@ -230,7 +243,7 @@ function textLines(text: string, width: number): string[] {
 
 /** Build a self-contained SVG that remains vector-sharp when printed to PDF. */
 export function createMindmapSvg(canvas: Canvas): string | null {
-	const nodes = Array.from(canvas.nodes.values()).filter((node) => node.type !== "group");
+	const nodes = Array.from(canvas.nodes.values());
 	const bounds = canvasBounds(nodes);
 	if (!bounds) return null;
 
@@ -248,9 +261,13 @@ export function createMindmapSvg(canvas: Canvas): string | null {
 		const labelMarkup = label
 			? `<text x="${(from.x + to.x) / 2}" y="${(from.y + to.y) / 2 - 6}" class="edge-label">${escapeXml(label)}</text>`
 			: "";
-		return `<path d="${edgePath(edge)}" class="edge" stroke="${stroke}"${edge.to.end === "arrow" ? " marker-end=\"url(#arrow)\"" : ""}/>${labelMarkup}`;
+		return `<path d="${edgePath(edge)}" class="edge" stroke="${stroke}"${edge.from.end === "arrow" ? " marker-start=\"url(#arrow)\"" : ""}${edge.to.end === "arrow" ? " marker-end=\"url(#arrow)\"" : ""}/>${labelMarkup}`;
 	}).join("");
-	const nodeMarkup = nodes.map((node) => {
+	const groupMarkup = nodes.filter((node) => node.type === "group").map((node) => {
+		const color = nodeColor(node.color);
+		return `<g><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" class="group" stroke="${color}"/><text x="${node.x + 14}" y="${node.y + 22}" class="group-label">${escapeXml(nodeText(node))}</text></g>`;
+	}).join("");
+	const nodeMarkup = nodes.filter((node) => node.type !== "group").map((node) => {
 		const color = nodeColor(node.color);
 		const lines = textLines(nodeText(node), node.width - 28);
 		const lineHeight = 18;
@@ -261,17 +278,17 @@ export function createMindmapSvg(canvas: Canvas): string | null {
 		return `<g><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" class="node" stroke="${color}"/>${labels}</g>`;
 	}).join("");
 
-	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${width}" height="${height}" role="img" aria-label="Mind map export"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker><style>.edge{fill:none;stroke-width:2.5}.edge-label{font:14px sans-serif;fill:#4b5563;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}.node{fill:#fff;stroke-width:3}.node-label{font:15px sans-serif;fill:#1f2937}</style></defs><rect x="${bounds.minX - PADDING}" y="${bounds.minY - PADDING}" width="${width}" height="${height}" fill="#fff"/>${edgeMarkup}${nodeMarkup}</svg>`;
+	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${width}" height="${height}" role="img" aria-label="Mind map export"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/></marker><style>.edge{fill:none;stroke-width:2.5}.edge-label{font:14px sans-serif;fill:#4b5563;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}.group{fill:#f8fafc;fill-opacity:.5;stroke-width:2;stroke-dasharray:6 4}.group-label{font:14px sans-serif;fill:#4b5563}.node{fill:#fff;stroke-width:3}.node-label{font:15px sans-serif;fill:#1f2937}</style></defs><rect x="${bounds.minX - PADDING}" y="${bounds.minY - PADDING}" width="${width}" height="${height}" fill="#fff"/>${groupMarkup}${edgeMarkup}${nodeMarkup}</svg>`;
 }
 
-/** Create a vector PDF and embed local PNG, JPEG, and WebP Canvas file nodes. */
+/** Create a vector PDF and embed every browser-decodable Canvas image file node. */
 export async function createMindmapPdf(
 	canvas: Canvas,
 	title: string,
 	resolveImage: ImageDataResolver,
 	pageSize: PdfPageSize = "a4"
 ): Promise<ArrayBuffer | null> {
-	const nodes = Array.from(canvas.nodes.values()).filter((node) => node.type !== "group");
+	const nodes = Array.from(canvas.nodes.values());
 	const bounds = canvasBounds(nodes);
 	if (!bounds) return null;
 
@@ -284,6 +301,29 @@ export async function createMindmapPdf(
 	const font = await pdf.embedFont(StandardFonts.Helvetica);
 	const pageHeight = layout.pageHeight;
 
+	for (const node of nodes) {
+		if (node.type !== "group") continue;
+		const topLeft = toPdfPoint(pageHeight, layout, bounds, node.x, node.y);
+		const nodeWidth = node.width * layout.scale;
+		const nodeHeight = node.height * layout.scale;
+		page.drawRectangle({
+			x: topLeft.x,
+			y: topLeft.y - nodeHeight,
+			width: nodeWidth,
+			height: nodeHeight,
+			borderColor: toPdfColor(node.color),
+			borderWidth: 2 * layout.scale,
+			opacity: 0.08,
+		});
+		page.drawText(nodeText(node).replace(/[^\x20-\xFF]/g, "?"), {
+			x: topLeft.x + 14 * layout.scale,
+			y: topLeft.y - 22 * layout.scale,
+			size: 14 * layout.scale,
+			font,
+			color: rgb(0.29, 0.33, 0.39),
+		});
+	}
+
 	for (const edge of canvas.edges.values()) {
 		if (!nodes.includes(edge.from.node) || !nodes.includes(edge.to.node)) continue;
 		const color = toPdfColor(edge.color || edge.from.node.color);
@@ -291,9 +331,8 @@ export async function createMindmapPdf(
 			borderColor: color,
 			borderWidth: 2.5 * layout.scale,
 		});
-		if (edge.to.end === "arrow") {
-			page.drawSvgPath(arrowPath(edge, pageHeight, layout, bounds), { color });
-		}
+		if (edge.from.end === "arrow") page.drawSvgPath(arrowPath(edge, "from", pageHeight, layout, bounds), { color });
+		if (edge.to.end === "arrow") page.drawSvgPath(arrowPath(edge, "to", pageHeight, layout, bounds), { color });
 		if (edge.label?.trim()) {
 			const from = anchor(edge.from.node, edge.from.side);
 			const to = anchor(edge.to.node, edge.to.side);
@@ -311,6 +350,7 @@ export async function createMindmapPdf(
 	}
 
 	for (const node of nodes) {
+		if (node.type === "group") continue;
 		const topLeft = toPdfPoint(pageHeight, layout, bounds, node.x, node.y);
 		const nodeWidth = node.width * layout.scale;
 		const nodeHeight = node.height * layout.scale;
@@ -343,17 +383,18 @@ export async function createMindmapPdf(
 		if (node.type !== "file") continue;
 		const path = filePaths.get(node.id);
 		if (!path) continue;
-		let format = imageFormat(path);
-		if (!format) continue;
+		const mimeType = imageMimeType(path);
+		if (!mimeType) continue;
 		const data = await resolveImage(path);
 		if (!data) continue;
 		try {
-			const imageData = format === "webp" ? await webpToPng(data) : data;
+			const imageData = mimeType === "image/png" || mimeType === "image/jpeg"
+				? data
+				: await rasterizeImageToPng(data, mimeType);
 			if (!imageData) continue;
-			if (format === "webp") format = "png";
-			const image = format === "png"
-				? await pdf.embedPng(imageData)
-				: await pdf.embedJpg(imageData);
+			const image = mimeType === "image/jpeg"
+				? await pdf.embedJpg(imageData)
+				: await pdf.embedPng(imageData);
 			const imageRatio = image.width / image.height;
 			const nodeRatio = node.width / node.height;
 			const inset = 6;
