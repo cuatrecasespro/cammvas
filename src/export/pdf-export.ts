@@ -1,4 +1,4 @@
-import type { Canvas, CanvasEdge, CanvasNode, NodeSide } from "../types/canvas-internal";
+import type { Canvas, CanvasEdge, CanvasNode, CanvasNodeFileData, NodeSide } from "../types/canvas-internal";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 const NODE_COLORS: Record<string, string> = {
@@ -85,6 +85,14 @@ function nodeText(node: CanvasNode): string {
 	return text.replace(/\s+/g, " ");
 }
 
+function getNodeTypes(canvas: Canvas): Map<string, CanvasNodeFileData["type"]> {
+	return new Map(canvas.getData().nodes.map((node) => [node.id, node.type]));
+}
+
+function nodeType(node: CanvasNode, nodeTypes: Map<string, CanvasNodeFileData["type"]>): CanvasNodeFileData["type"] {
+	return nodeTypes.get(node.id) ?? node.type;
+}
+
 function nodeColor(color: string): string {
 	return NODE_COLORS[color] ?? (color.startsWith("#") ? color : "#7f8c9a");
 }
@@ -164,16 +172,28 @@ function toPdfPoint(
 	};
 }
 
+/** pdf-lib flips SVG paths vertically, unlike its rectangle and text APIs. */
+function toPdfSvgPoint(
+	pageHeight: number,
+	layout: PdfPageLayout,
+	bounds: Bounds,
+	x: number,
+	y: number
+): { x: number; y: number } {
+	const point = toPdfPoint(pageHeight, layout, bounds, x, y);
+	return { x: point.x, y: -point.y };
+}
+
 function pdfEdgePath(edge: CanvasEdge, pageHeight: number, layout: PdfPageLayout, bounds: Bounds): string {
 	const from = anchor(edge.from.node, edge.from.side);
 	const to = anchor(edge.to.node, edge.to.side);
 	const distance = Math.max(40, Math.abs(to.x - from.x) * 0.45, Math.abs(to.y - from.y) * 0.2);
 	const cp1 = controlPoint(from, edge.from.side, distance);
 	const cp2 = controlPoint(to, edge.to.side, distance);
-	const start = toPdfPoint(pageHeight, layout, bounds, from.x, from.y);
-	const firstControl = toPdfPoint(pageHeight, layout, bounds, cp1.x, cp1.y);
-	const secondControl = toPdfPoint(pageHeight, layout, bounds, cp2.x, cp2.y);
-	const end = toPdfPoint(pageHeight, layout, bounds, to.x, to.y);
+	const start = toPdfSvgPoint(pageHeight, layout, bounds, from.x, from.y);
+	const firstControl = toPdfSvgPoint(pageHeight, layout, bounds, cp1.x, cp1.y);
+	const secondControl = toPdfSvgPoint(pageHeight, layout, bounds, cp2.x, cp2.y);
+	const end = toPdfSvgPoint(pageHeight, layout, bounds, to.x, to.y);
 	return `M ${start.x} ${start.y} C ${firstControl.x} ${firstControl.y}, ${secondControl.x} ${secondControl.y}, ${end.x} ${end.y}`;
 }
 
@@ -189,8 +209,8 @@ function arrowPath(
 	const other = edge[end === "from" ? "to" : "from"].node;
 	const distance = Math.max(40, Math.abs(point.x - other.x) * 0.45, Math.abs(point.y - other.y) * 0.2);
 	const control = controlPoint(point, endpoint.side, distance);
-	const tip = toPdfPoint(pageHeight, layout, bounds, point.x, point.y);
-	const tail = toPdfPoint(pageHeight, layout, bounds, control.x, control.y);
+	const tip = toPdfSvgPoint(pageHeight, layout, bounds, point.x, point.y);
+	const tail = toPdfSvgPoint(pageHeight, layout, bounds, control.x, control.y);
 	const dx = tip.x - tail.x;
 	const dy = tip.y - tail.y;
 	const length = Math.hypot(dx, dy) || 1;
@@ -244,6 +264,7 @@ function textLines(text: string, width: number): string[] {
 /** Build a self-contained SVG that remains vector-sharp when printed to PDF. */
 export function createMindmapSvg(canvas: Canvas): string | null {
 	const nodes = Array.from(canvas.nodes.values());
+	const nodeTypes = getNodeTypes(canvas);
 	const bounds = canvasBounds(nodes);
 	if (!bounds) return null;
 
@@ -263,11 +284,11 @@ export function createMindmapSvg(canvas: Canvas): string | null {
 			: "";
 		return `<path d="${edgePath(edge)}" class="edge" stroke="${stroke}"${edge.from.end === "arrow" ? " marker-start=\"url(#arrow)\"" : ""}${edge.to.end === "arrow" ? " marker-end=\"url(#arrow)\"" : ""}/>${labelMarkup}`;
 	}).join("");
-	const groupMarkup = nodes.filter((node) => node.type === "group").map((node) => {
+	const groupMarkup = nodes.filter((node) => nodeType(node, nodeTypes) === "group").map((node) => {
 		const color = nodeColor(node.color);
 		return `<g><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" class="group" stroke="${color}"/><text x="${node.x + 14}" y="${node.y + 22}" class="group-label">${escapeXml(nodeText(node))}</text></g>`;
 	}).join("");
-	const nodeMarkup = nodes.filter((node) => node.type !== "group").map((node) => {
+	const nodeMarkup = nodes.filter((node) => nodeType(node, nodeTypes) !== "group").map((node) => {
 		const color = nodeColor(node.color);
 		const lines = textLines(nodeText(node), node.width - 28);
 		const lineHeight = 18;
@@ -289,6 +310,8 @@ export async function createMindmapPdf(
 	pageSize: PdfPageSize = "a4"
 ): Promise<ArrayBuffer | null> {
 	const nodes = Array.from(canvas.nodes.values());
+	const nodeData = canvas.getData().nodes;
+	const nodeTypes = new Map(nodeData.map((node) => [node.id, node.type]));
 	const bounds = canvasBounds(nodes);
 	if (!bounds) return null;
 
@@ -302,7 +325,7 @@ export async function createMindmapPdf(
 	const pageHeight = layout.pageHeight;
 
 	for (const node of nodes) {
-		if (node.type !== "group") continue;
+		if (nodeType(node, nodeTypes) !== "group") continue;
 		const topLeft = toPdfPoint(pageHeight, layout, bounds, node.x, node.y);
 		const nodeWidth = node.width * layout.scale;
 		const nodeHeight = node.height * layout.scale;
@@ -350,7 +373,7 @@ export async function createMindmapPdf(
 	}
 
 	for (const node of nodes) {
-		if (node.type === "group") continue;
+		if (nodeType(node, nodeTypes) === "group") continue;
 		const topLeft = toPdfPoint(pageHeight, layout, bounds, node.x, node.y);
 		const nodeWidth = node.width * layout.scale;
 		const nodeHeight = node.height * layout.scale;
@@ -363,7 +386,7 @@ export async function createMindmapPdf(
 			borderWidth: 3 * layout.scale,
 			color: rgb(1, 1, 1),
 		});
-		if (node.type === "file") continue;
+		if (nodeType(node, nodeTypes) === "file") continue;
 		const lines = textLines(nodeText(node), node.width - 28);
 		const lineHeight = 18 * layout.scale;
 		const startY = topLeft.y - nodeHeight / 2 + ((lines.length - 1) * lineHeight) / 2 - 6 * layout.scale;
@@ -378,9 +401,9 @@ export async function createMindmapPdf(
 		}
 	}
 
-	const filePaths = new Map(canvas.getData().nodes.map((node) => [node.id, node.file]));
+	const filePaths = new Map(nodeData.map((node) => [node.id, node.file]));
 	for (const node of nodes) {
-		if (node.type !== "file") continue;
+		if (nodeType(node, nodeTypes) !== "file") continue;
 		const path = filePaths.get(node.id);
 		if (!path) continue;
 		const mimeType = imageMimeType(path);

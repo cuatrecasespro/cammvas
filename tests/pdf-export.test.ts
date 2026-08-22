@@ -23,7 +23,11 @@ function canvas(nodes: CanvasNode[], edges: CanvasEdge[] = [], filePaths = new M
 		nodes: new Map(nodes.map((item) => [item.id, item])),
 		edges: new Map(edges.map((item) => [item.id, item])),
 		getData: () => ({
-			nodes: nodes.map((item) => ({ id: item.id, type: item.type, file: filePaths.get(item.id) })),
+			nodes: nodes.map((item) => ({
+				id: item.id,
+				type: filePaths.has(item.id) ? "file" : item.type,
+				file: filePaths.get(item.id),
+			})),
 			edges: [],
 		}),
 	} as unknown as Canvas;
@@ -138,6 +142,8 @@ describe("createMindmapPdf", () => {
 	it("embeds local image file nodes", async () => {
 		const image = node("image", 0, 0, "");
 		image.type = "file";
+		// Obsidian Canvas file-node instances expose `file`, not `type`.
+		delete (image as Partial<CanvasNode>).type;
 		const paths = new Map([[image.id, "assets/image.png"]]);
 		const png = Uint8Array.from(
 			atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9rQAAAABJRU5ErkJggg=="),
