@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf, setIcon, Menu, Platform, SearchComponent } from "obsidian";
-import type { Canvas, CanvasNode, CanvasView as CanvasViewType } from "../types/canvas-internal";
-import { buildForest, TreeNode, getDescendants, getGroupIds } from "../mindmap/tree-model";
+import type { Canvas, CanvasNode, CanvasNodeFileData, CanvasView as CanvasViewType } from "../types/canvas-internal";
+import { buildForest, TreeNode, getDescendants, getGroupIds, getNodeTitle } from "../mindmap/tree-model";
 import { copyText } from "./clipboard";
 
 export const OUTLINE_VIEW_TYPE = "cammvas-outline";
@@ -33,6 +33,7 @@ export class OutlineView extends ItemView {
 	private collapseBtnEl: HTMLElement | null = null;
 	private searchContainerEl: HTMLElement | null = null;
 	private searchComponent: SearchComponent | null = null;
+	private nodeDataById = new Map<string, CanvasNodeFileData>();
 	zoomPadding = 0;
 	onForestLayout: ((canvas: Canvas, groupId: string) => void) | null = null;
 
@@ -134,6 +135,7 @@ export class OutlineView extends ItemView {
 		this.groupElMap.clear();
 		this.allItemEls.clear();
 		this.lastCanvas = canvas;
+		this.nodeDataById = new Map(canvas.getData().nodes.map((node) => [node.id, node]));
 
 		// Store the canvas leaf for click navigation
 		this.canvasLeaf = this.app.workspace.getLeavesOfType("canvas")
@@ -304,7 +306,10 @@ export class OutlineView extends ItemView {
 			: self.createDiv({ cls: "tree-item-icon cammvas-outline-drag-handle" });
 		if (dragHandle) setIcon(dragHandle, "grip-vertical");
 
-		self.createDiv({ cls: "tree-item-inner", text: getRootTitle(root.canvasNode.text) });
+		self.createDiv({
+			cls: "tree-item-inner",
+			text: getNodeTitle(root.canvasNode, this.nodeDataById.get(root.canvasNode.id)),
+		});
 
 		// Handle-based drag: only start drag when pointerdown on grip icon
 		if (dragHandle) {
@@ -414,7 +419,10 @@ export class OutlineView extends ItemView {
 			});
 		}
 
-		self.createDiv({ cls: "tree-item-inner", text: getRootTitle(node.canvasNode.text) });
+		self.createDiv({
+			cls: "tree-item-inner",
+			text: getNodeTitle(node.canvasNode, this.nodeDataById.get(node.canvasNode.id)),
+		});
 		this.allItemEls.set(node.canvasNode.id, self);
 
 		self.addEventListener("click", () => this.navigateToNode(canvas, node.canvasNode));
@@ -795,6 +803,7 @@ export class OutlineView extends ItemView {
 		this.selectedRoots.clear();
 		this.groupElMap.clear();
 		this.allItemEls.clear();
+		this.nodeDataById.clear();
 		this.collapsedGroups.clear();
 		this.collapsedNodes.clear();
 		this.activeNodeId = null;
@@ -806,16 +815,4 @@ export class OutlineView extends ItemView {
 			text: "Open a canvas to see root nodes",
 		});
 	}
-}
-
-/**
- * Extract a clean title from a node's text content.
- * Takes the first line, strips markdown heading markers.
- */
-export function getRootTitle(text: string): string {
-	const firstLine = (text || "").split("\n")[0].trim();
-	return firstLine
-		.replace(/^#+\s*/, "")
-		.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-		|| "Untitled";
 }

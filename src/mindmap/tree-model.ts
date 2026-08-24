@@ -1,4 +1,4 @@
-import type { Canvas, CanvasNode } from "../types/canvas-internal";
+import type { Canvas, CanvasNode, CanvasNodeFileData } from "../types/canvas-internal";
 
 export type BranchDirection = "left" | "right";
 
@@ -95,6 +95,20 @@ export function getGroupIds(canvas: Canvas): Set<string> {
 		if (nd.type === "group") ids.add(nd.id);
 	}
 	return ids;
+}
+
+/** Return the Canvas text title, or the linked Markdown filename for file nodes. */
+export function getNodeTitle(node: CanvasNode, data?: CanvasNodeFileData): string {
+	const firstLine = (node.text || "").split("\n")[0].trim();
+	if (firstLine) {
+		return firstLine
+			.replace(/^#+\s*/, "")
+			.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+			|| "Untitled";
+	}
+
+	const fileName = data?.file?.split("/").pop();
+	return fileName?.replace(/\.md$/i, "") || "Untitled";
 }
 
 /**

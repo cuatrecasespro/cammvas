@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Canvas, CanvasEdge, CanvasNode } from "../src/types/canvas-internal";
-import { buildForest, findTreeForNode, getDescendants } from "../src/mindmap/tree-model";
+import { buildForest, findTreeForNode, getDescendants, getNodeTitle } from "../src/mindmap/tree-model";
 
 function node(id: string, x: number, y: number): CanvasNode {
 	return { id, x, y, width: 100, height: 50 } as CanvasNode;
@@ -66,5 +66,21 @@ describe("buildForest", () => {
 
 		expect(forest.map((root) => root.canvasNode.id)).toEqual(["large-root", "small-root"]);
 		expect(findTreeForNode(forest, "group")).toBeNull();
+	});
+});
+
+describe("getNodeTitle", () => {
+	it("uses a linked Markdown filename when the runtime node has no text", () => {
+		const fileNode = { id: "note", text: "" } as CanvasNode;
+
+		expect(getNodeTitle(fileNode, {
+			id: "note",
+			type: "file",
+			x: 0,
+			y: 0,
+			width: 100,
+			height: 50,
+			file: "Projects/Meeting notes.md",
+		})).toBe("Meeting notes");
 	});
 });
