@@ -121,7 +121,7 @@ export class LayoutEngine {
 		contour.set(depth, { top: nodeX, bottom: nodeX + nodeW });
 		if (node.children.length === 0) return contour;
 
-		const childY = nodeY + nodeH + this.config.verticalGap;
+		const childY = nodeY + nodeH + this.verticalLevelGap();
 		const subtrees: SubtreeInfo[] = [];
 		for (const child of node.children) {
 			const childPositions = new Map<string, NodePosition>();
@@ -276,21 +276,18 @@ export class LayoutEngine {
 
 		if (node.children.length === 0) return contour;
 
-		// Keep each child's actual side. A branch can legitimately fork in both
-		// directions below a non-root node.
+		// Keep every descendant on its root branch's side. Reusing stale Canvas
+		// coordinates here makes a re-layout fold branches back through the tree.
 		const childSubtrees: SubtreeInfo[] = [];
 		for (const child of node.children) {
 			const childW = child.canvasNode.width || this.config.nodeWidth;
-			const nodeCenterX = node.canvasNode.x + node.canvasNode.width / 2;
-			const childCenterX = child.canvasNode.x + child.canvasNode.width / 2;
-			const childDirection = childCenterX >= nodeCenterX ? "right" : "left";
-			const childX = childDirection === "right"
+			const childX = direction === "right"
 				? nodeX + nodeW + this.config.horizontalGap
 				: nodeX - childW - this.config.horizontalGap;
 
 			const tempPositions = new Map<string, NodePosition>();
 			const childContour = this.layoutSubtree(
-				child, childX, 0, depth + 1, childDirection, tempPositions
+				child, childX, 0, depth + 1, direction, tempPositions
 			);
 			childSubtrees.push({ positions: tempPositions, contour: childContour });
 		}
@@ -413,6 +410,11 @@ export class LayoutEngine {
 		}
 
 		return { yOffsets, combinedContour };
+	}
+
+	/** Leave enough room for labels and edges between vertical tree levels. */
+	private verticalLevelGap(): number {
+		return Math.max(this.config.verticalGap, 40);
 	}
 
 	/**

@@ -131,9 +131,36 @@ describe("LayoutEngine.layout", () => {
 		new LayoutEngine({ animate: false, horizontalGap: 80, verticalGap: 20 }).layout(canvas, new Set(), "vertical");
 
 		expect([root.x, root.y]).toEqual([0, 0]);
-		expect(first.y).toBe(70);
-		expect(second.y).toBe(70);
-		expect(grandchild.y).toBe(140);
+		expect(first.y).toBe(90);
+		expect(second.y).toBe(90);
+		expect(grandchild.y).toBe(180);
 		expect(first.x).toBeLessThan(second.x);
+	});
+
+	it("keeps all descendants on their parent branch side", () => {
+		const root = node("root", 0, 0);
+		const branch = node("branch", 200, 0);
+		const descendant = node("descendant", -500, 500);
+		const nodes = new Map([root, branch, descendant].map((item) => [item.id, item]));
+		const canvas = {
+			nodes,
+			edges: new Map([
+				["root-branch", edge("root-branch", root, branch)],
+				["branch-descendant", edge("branch-descendant", branch, descendant)],
+			]),
+			getData: () => ({
+				nodes: Array.from(nodes.values(), (item) => ({
+					id: item.id, type: "text", x: item.x, y: item.y, width: item.width, height: item.height,
+				})),
+				edges: [],
+			}),
+			requestSave: vi.fn(),
+			requestFrame: vi.fn(),
+		} as unknown as Canvas;
+
+		new LayoutEngine({ animate: false, horizontalGap: 80, verticalGap: 20 }).layout(canvas);
+
+		expect(branch.x).toBeGreaterThan(root.x);
+		expect(descendant.x).toBeGreaterThan(branch.x);
 	});
 });

@@ -1535,17 +1535,17 @@ export default class CanvasMindMapPlugin extends Plugin {
 			event.stopPropagation();
 			void this.exportMindmapPdf(canvas);
 		});
-		autoLayoutOnEditBtn.after(exportPdfBtn);
-		this.exportPdfBtnEl = exportPdfBtn;
-
 		const layoutBtn = controls.createEl("button", { attr: { type: "button" } });
 		layoutBtn.addClass("cammvas-toggle-btn", "cammvas-layout-btn", "clickable-icon");
 		this.registerDomEvent(layoutBtn, "click", (event) => {
 			event.stopPropagation();
 			this.showLayoutMenu(event, canvas);
 		});
-		exportPdfBtn.after(layoutBtn);
+		autoLayoutOnEditBtn.after(layoutBtn);
 		this.layoutBtnEl = layoutBtn;
+
+		layoutBtn.after(exportPdfBtn);
+		this.exportPdfBtnEl = exportPdfBtn;
 
 		if (Platform.isMobile) {
 			const actionsBtn = controls.createEl('button', { attr: { type: 'button' } });
