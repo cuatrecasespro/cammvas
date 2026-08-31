@@ -2,7 +2,7 @@ import { Plugin, Notice, TFile, TFolder, Menu, Platform, debounce, WorkspaceLeaf
 import type { Canvas, CanvasNode, CanvasEdge, CreateNodeOptions } from "./types/canvas-internal";
 import { CanvasAPI } from "./canvas/canvas-api";
 import { NodeOperations } from "./mindmap/node-operations";
-import { LayoutEngine } from "./mindmap/layout-engine";
+import { LayoutEngine, LayoutOrientation } from "./mindmap/layout-engine";
 import { BranchColors } from "./mindmap/branch-colors";
 import { KeyboardHandler } from "./ui/keyboard-handler";
 
@@ -51,6 +51,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private toggleBtnEl: HTMLElement | null = null;
 	private dragReparentBtnEl: HTMLElement | null = null;
 	private autoLayoutOnEditBtnEl: HTMLElement | null = null;
+	private layoutBtnEl: HTMLElement | null = null;
 	private exportPdfBtnEl: HTMLElement | null = null;
 	private enterTabBtnEl: HTMLElement | null = null;
 	private mobileActionsBtnEl: HTMLElement | null = null;
@@ -390,12 +391,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 						["5", "Blue"],
 						["6", "Purple"],
 					] as const;
-					for (const [color, label] of branchColors) {
-						menu.addItem((item) => item
-							.setTitle(`Branch color: ${label}`)
-							.setIcon(`cammvas-color-${color}`)
-							.onClick(() => this.branchColors.setBranchColor(canvas, node.id, color)));
-					}
+					menu.addItem((item) => item
+						.setTitle("Branch color")
+						.setIcon("palette")
+						.onClick((event) => this.showBranchColorMenu(event, canvas, node.id, branchColors)));
 				}
 
 				if (groupIds.has(node.id)) {
@@ -610,6 +609,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.autoLayoutOnEditBtnEl.remove();
 			this.autoLayoutOnEditBtnEl = null;
 		}
+		if (this.layoutBtnEl) {
+			this.layoutBtnEl.remove();
+			this.layoutBtnEl = null;
+		}
 		if (this.exportPdfBtnEl) {
 			this.exportPdfBtnEl.remove();
 			this.exportPdfBtnEl = null;
@@ -716,6 +719,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.autoLayoutOnEditBtnEl.remove();
 				this.autoLayoutOnEditBtnEl = null;
 			}
+			if (this.layoutBtnEl) {
+				this.layoutBtnEl.remove();
+				this.layoutBtnEl = null;
+			}
 			if (this.exportPdfBtnEl) {
 				this.exportPdfBtnEl.remove();
 				this.exportPdfBtnEl = null;
@@ -740,6 +747,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 
 		// Inject mindmap toggle button into canvas toolbar
 		this.injectToggleButton(canvas);
+		this.updateLayoutButton(canvas);
 
 		// Set up Ctrl+click zoom handler
 		this.cleanupClickHandler = Platform.isMobile
@@ -1444,6 +1452,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.updateToggleButton(canvas);
 		this.updateDragReparentButton(canvas);
 		this.updateAutoLayoutOnEditButton(canvas);
+		this.updateLayoutButton(canvas);
 		this.updateExportPdfButton(canvas);
 		this.updateEnterTabButton(canvas);
 		this.updateMobileActionsButton(canvas);
@@ -1463,6 +1472,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (this.autoLayoutOnEditBtnEl) {
 			this.autoLayoutOnEditBtnEl.remove();
 			this.autoLayoutOnEditBtnEl = null;
+		}
+		if (this.layoutBtnEl) {
+			this.layoutBtnEl.remove();
+			this.layoutBtnEl = null;
 		}
 		if (this.exportPdfBtnEl) {
 			this.exportPdfBtnEl.remove();
@@ -1524,6 +1537,15 @@ export default class CanvasMindMapPlugin extends Plugin {
 		});
 		autoLayoutOnEditBtn.after(exportPdfBtn);
 		this.exportPdfBtnEl = exportPdfBtn;
+
+		const layoutBtn = controls.createEl("button", { attr: { type: "button" } });
+		layoutBtn.addClass("cammvas-toggle-btn", "cammvas-layout-btn", "clickable-icon");
+		this.registerDomEvent(layoutBtn, "click", (event) => {
+			event.stopPropagation();
+			this.showLayoutMenu(event, canvas);
+		});
+		exportPdfBtn.after(layoutBtn);
+		this.layoutBtnEl = layoutBtn;
 
 		if (Platform.isMobile) {
 			const actionsBtn = controls.createEl('button', { attr: { type: 'button' } });
@@ -1605,6 +1627,42 @@ export default class CanvasMindMapPlugin extends Plugin {
 			.onClick(() => this.showOutline(canvas, true)));
 		const rect = anchor.getBoundingClientRect();
 		menu.showAtPosition({ x: rect.left, y: rect.bottom });
+	}
+
+	private showBranchColorMenu(
+		event: MouseEvent | KeyboardEvent,
+		canvas: Canvas,
+		nodeId: string,
+		colors: ReadonlyArray<readonly [string, string]>
+	): void {
+		const colorMenu = new Menu();
+		for (const [color, label] of colors) {
+			colorMenu.addItem((item) => item
+				.setTitle(label)
+				.setIcon(`cammvas-color-${color}`)
+				.onClick(() => this.branchColors.setBranchColor(canvas, nodeId, color)));
+		}
+		colorMenu.showAtMouseEvent(event as MouseEvent);
+	}
+
+	private showLayoutMenu(event: MouseEvent, canvas: Canvas): void {
+		if (!this.isMindmapCanvas(canvas)) return;
+		const layoutMenu = new Menu();
+		for (const [orientation, title, icon] of [
+			["horizontal", "Horizontal layout", "rows-3"],
+			["vertical", "Vertical layout", "columns-3"],
+		] as const) {
+			layoutMenu.addItem((item) => item
+				.setTitle(title)
+				.setIcon(icon)
+				.onClick(() => this.applyLayout(canvas, orientation)));
+		}
+		layoutMenu.showAtMouseEvent(event);
+	}
+
+	private applyLayout(canvas: Canvas, orientation: LayoutOrientation): void {
+		this.layoutEngine.layout(canvas, new Set(), orientation);
+		this.updateGroupBounds(canvas);
 	}
 
 	private exportMindmapPdf(canvas: Canvas): void {
@@ -1705,6 +1763,19 @@ export default class CanvasMindMapPlugin extends Plugin {
 			!controlEnabled
 				? 'Auto-layout on manual edits (requires mindmap mode)'
 				: isActive ? 'Auto-layout on manual edits (active)' : 'Auto-layout on manual edits (inactive)'
+		);
+	}
+
+	private updateLayoutButton(canvas = this.canvasApi.getActiveCanvas()): void {
+		if (!this.layoutBtnEl) return;
+		const enabled = !!canvas && this.isMindmapCanvas(canvas) && canvas.nodes.size > 0;
+		this.layoutBtnEl.empty();
+		setIcon(this.layoutBtnEl, "layout-template");
+		this.layoutBtnEl.toggleAttribute("disabled", !enabled);
+		this.layoutBtnEl.setAttribute("aria-disabled", String(!enabled));
+		this.layoutBtnEl.setAttribute(
+			"aria-label",
+			enabled ? "Choose mindmap layout" : "Choose layout (requires a non-empty mindmap)"
 		);
 	}
 

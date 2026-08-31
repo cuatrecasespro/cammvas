@@ -10,6 +10,8 @@ export interface LayoutConfig {
 	animate: boolean;
 }
 
+export type LayoutOrientation = "horizontal" | "vertical";
+
 const DEFAULT_CONFIG: LayoutConfig = {
 	horizontalGap: 80,
 	verticalGap: 20,
@@ -56,7 +58,16 @@ export class LayoutEngine {
 	 * Each root's children are partitioned into left/right groups and
 	 * laid out independently, centered around their own root.
 	 */
-	layout(canvas: Canvas, skipAnimationNodeIds: ReadonlySet<string> = new Set()): void {
+	layout(
+		canvas: Canvas,
+		skipAnimationNodeIds: ReadonlySet<string> = new Set(),
+		orientation: LayoutOrientation = "horizontal"
+	): void {
+		if (orientation === "vertical") {
+			this.layoutVertically(canvas, skipAnimationNodeIds);
+			return;
+		}
+
 		const forest = buildForest(canvas);
 		if (forest.length === 0) return;
 
@@ -78,6 +89,70 @@ export class LayoutEngine {
 
 		this.applyPositions(canvas, positions, skipAnimationNodeIds);
 		updateAllEdgeSides(canvas);
+	}
+
+	/** Arrange every tree top-down, with child branches spread horizontally. */
+	private layoutVertically(canvas: Canvas, skipAnimationNodeIds: ReadonlySet<string>): void {
+		const forest = buildForest(canvas);
+		if (forest.length === 0) return;
+
+		const positions = new Map<string, NodePosition>();
+		for (const root of forest) {
+			this.layoutVerticalSubtree(root, root.canvasNode.x, root.canvasNode.y, 0, positions);
+		}
+
+		this.applyPositions(canvas, positions, skipAnimationNodeIds);
+		updateAllEdgeSides(canvas);
+	}
+
+	/** Layout a subtree below its parent and return its horizontal contour. */
+	private layoutVerticalSubtree(
+		node: TreeNode,
+		nodeX: number,
+		nodeY: number,
+		depth: number,
+		positions: Map<string, NodePosition>
+	): Contour {
+		const nodeW = node.canvasNode.width || this.config.nodeWidth;
+		const nodeH = node.canvasNode.height || this.config.nodeHeight;
+		positions.set(node.canvasNode.id, { x: nodeX, y: nodeY });
+
+		const contour: Contour = new Map();
+		contour.set(depth, { top: nodeX, bottom: nodeX + nodeW });
+		if (node.children.length === 0) return contour;
+
+		const childY = nodeY + nodeH + this.config.verticalGap;
+		const subtrees: SubtreeInfo[] = [];
+		for (const child of node.children) {
+			const childPositions = new Map<string, NodePosition>();
+			const childContour = this.layoutVerticalSubtree(child, 0, childY, depth + 1, childPositions);
+			subtrees.push({ positions: childPositions, contour: childContour });
+		}
+
+		const { yOffsets, combinedContour } = this.packSubtreesHorizontally(subtrees);
+		const lastChild = node.children[node.children.length - 1].canvasNode;
+		const blockLeft = yOffsets[0];
+		const blockRight = yOffsets[yOffsets.length - 1] + (lastChild.width || this.config.nodeWidth);
+		const xShift = nodeX + nodeW / 2 - (blockLeft + blockRight) / 2;
+
+		for (let i = 0; i < subtrees.length; i++) {
+			for (const [id, pos] of subtrees[i].positions) {
+				positions.set(id, { x: pos.x + yOffsets[i] + xShift, y: pos.y });
+			}
+		}
+
+		for (const [d, extent] of combinedContour) {
+			const shifted = { top: extent.top + xShift, bottom: extent.bottom + xShift };
+			const existing = contour.get(d);
+			if (existing) {
+				existing.top = Math.min(existing.top, shifted.top);
+				existing.bottom = Math.max(existing.bottom, shifted.bottom);
+			} else {
+				contour.set(d, shifted);
+			}
+		}
+
+		return contour;
 	}
 
 	/**
@@ -297,6 +372,42 @@ export class LayoutEngine {
 					if (shifted.bottom > existing.bottom) existing.bottom = shifted.bottom;
 				} else {
 					combinedContour.set(d, { ...shifted });
+				}
+			}
+		}
+
+		return { yOffsets, combinedContour };
+	}
+
+	/** Pack sibling subtrees left-to-right using their horizontal contours. */
+	private packSubtreesHorizontally(
+		subtrees: SubtreeInfo[]
+	): { yOffsets: number[]; combinedContour: Contour } {
+		if (subtrees.length === 0) return { yOffsets: [], combinedContour: new Map() };
+
+		const yOffsets = [0];
+		const combinedContour: Contour = new Map();
+		for (const [depth, extent] of subtrees[0].contour) {
+			combinedContour.set(depth, { top: extent.top, bottom: extent.bottom });
+		}
+
+		for (let i = 1; i < subtrees.length; i++) {
+			const subtree = subtrees[i];
+			let shift = 0;
+			for (const [depth, extent] of subtree.contour) {
+				const previous = combinedContour.get(depth);
+				if (previous) shift = Math.max(shift, previous.bottom + this.config.horizontalGap - extent.top);
+			}
+			yOffsets.push(shift);
+
+			for (const [depth, extent] of subtree.contour) {
+				const shifted = { top: extent.top + shift, bottom: extent.bottom + shift };
+				const existing = combinedContour.get(depth);
+				if (existing) {
+					existing.top = Math.min(existing.top, shifted.top);
+					existing.bottom = Math.max(existing.bottom, shifted.bottom);
+				} else {
+					combinedContour.set(depth, shifted);
 				}
 			}
 		}

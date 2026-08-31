@@ -103,3 +103,37 @@ describe("LayoutEngine.layoutChildren", () => {
 		expect(rightChild.x).toBe(380);
 	});
 });
+
+describe("LayoutEngine.layout", () => {
+	it("arranges a vertical layout below the root", () => {
+		const root = node("root", 0, 0);
+		const first = node("first", -500, 300);
+		const second = node("second", 500, 500);
+		const grandchild = node("grandchild", 1000, 900);
+		const nodes = new Map([root, first, second, grandchild].map((item) => [item.id, item]));
+		const canvas = {
+			nodes,
+			edges: new Map([
+				["root-first", edge("root-first", root, first)],
+				["root-second", edge("root-second", root, second)],
+				["first-grandchild", edge("first-grandchild", first, grandchild)],
+			]),
+			getData: () => ({
+				nodes: Array.from(nodes.values(), (item) => ({
+					id: item.id, type: "text", x: item.x, y: item.y, width: item.width, height: item.height,
+				})),
+				edges: [],
+			}),
+			requestSave: vi.fn(),
+			requestFrame: vi.fn(),
+		} as unknown as Canvas;
+
+		new LayoutEngine({ animate: false, horizontalGap: 80, verticalGap: 20 }).layout(canvas, new Set(), "vertical");
+
+		expect([root.x, root.y]).toEqual([0, 0]);
+		expect(first.y).toBe(70);
+		expect(second.y).toBe(70);
+		expect(grandchild.y).toBe(140);
+		expect(first.x).toBeLessThan(second.x);
+	});
+});
