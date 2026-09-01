@@ -63,6 +63,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private pendingTimers = new Set<{ id: number; win: Window }>();
 	private pendingRafs = new Set<{ id: number; win: Window }>();
 	private pendingObservers: Set<MutationObserver> = new Set();
+	private editExitGeneration = 0;
 	/** Original canvas methods for unwrapping on cleanup. */
 	private origCanvasMethods: {
 		requestSave?: () => void;
@@ -925,7 +926,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 				maxHeight: this.settings.maxNodeHeight,
 			},
 			(canvas, editedNode) => {
+				const generation = ++this.editExitGeneration;
 				this.waitForPreview(editedNode, () => {
+					if (generation !== this.editExitGeneration) return;
 					// Guard: skip if canvas changed while waiting
 					if (this.canvasApi.getActiveCanvas() !== canvas) return;
 					const forest = buildForest(canvas);
@@ -942,10 +945,12 @@ export default class CanvasMindMapPlugin extends Plugin {
 			}
 		);
 		this.keyboardHandler.onBeforeLeaveNode = () => {
+			const generation = ++this.editExitGeneration;
 			this.autoResizeHandle?.finalizeNode();
 			const node = this.canvasApi.getSelectedNode(canvas);
 			if (node?.isEditing) {
 				this.waitForPreview(node, () => {
+					if (generation !== this.editExitGeneration) return;
 					// Guard: skip if canvas changed while waiting
 					if (this.canvasApi.getActiveCanvas() !== canvas) return;
 					this.preserveViewport(canvas, () => {

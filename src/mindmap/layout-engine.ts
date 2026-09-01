@@ -68,7 +68,7 @@ export class LayoutEngine {
 			return;
 		}
 
-		const forest = buildForest(canvas);
+		const forest = buildForest(canvas, true);
 		if (forest.length === 0) return;
 
 		const positions = new Map<string, NodePosition>();
@@ -93,7 +93,7 @@ export class LayoutEngine {
 
 	/** Arrange every tree top-down, with child branches spread horizontally. */
 	private layoutVertically(canvas: Canvas, skipAnimationNodeIds: ReadonlySet<string>): void {
-		const forest = buildForest(canvas);
+		const forest = buildForest(canvas, true);
 		if (forest.length === 0) return;
 
 		const positions = new Map<string, NodePosition>();
