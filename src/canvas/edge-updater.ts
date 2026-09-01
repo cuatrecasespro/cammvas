@@ -1,5 +1,7 @@
 import type { Canvas, CanvasNode, NodeSide } from "../types/canvas-internal";
 
+export type EdgeOrientation = "horizontal" | "vertical";
+
 interface NodeCenter {
 	cx: number;
 	cy: number;
@@ -20,14 +22,21 @@ function getCenter(node: CanvasNode): NodeCenter {
  */
 export function computeEdgeSides(
 	fromNode: CanvasNode,
-	toNode: CanvasNode
+	toNode: CanvasNode,
+	orientation?: EdgeOrientation
 ): { fromSide: NodeSide; toSide: NodeSide } {
 	const fromCenter = getCenter(fromNode);
 	const toCenter = getCenter(toNode);
 
 	const dx = toCenter.cx - fromCenter.cx;
+	const dy = toCenter.cy - fromCenter.cy;
 
-	// Mind map edges always connect horizontally (left/right).
+	if (orientation === "vertical" || (!orientation && Math.abs(dy) > Math.abs(dx))) {
+		return dy >= 0
+			? { fromSide: "bottom", toSide: "top" }
+			: { fromSide: "top", toSide: "bottom" };
+	}
+
 	if (dx >= 0) {
 		return { fromSide: "right", toSide: "left" };
 	} else {
@@ -40,7 +49,7 @@ export function computeEdgeSides(
  * to match the current positions of their connected nodes.
  * Only mutates edges whose sides actually changed.
  */
-export function updateAllEdgeSides(canvas: Canvas): void {
+export function updateAllEdgeSides(canvas: Canvas, orientation?: EdgeOrientation): void {
 	let changed = false;
 
 	for (const edge of canvas.edges.values()) {
@@ -49,7 +58,7 @@ export function updateAllEdgeSides(canvas: Canvas): void {
 
 		if (!fromNode || !toNode) continue;
 
-		const { fromSide, toSide } = computeEdgeSides(fromNode, toNode);
+		const { fromSide, toSide } = computeEdgeSides(fromNode, toNode, orientation);
 
 		if (edge.from.side !== fromSide || edge.to.side !== toSide) {
 			edge.from.side = fromSide;

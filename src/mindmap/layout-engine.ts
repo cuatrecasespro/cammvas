@@ -88,7 +88,7 @@ export class LayoutEngine {
 		}
 
 		this.applyPositions(canvas, positions, skipAnimationNodeIds);
-		updateAllEdgeSides(canvas);
+		updateAllEdgeSides(canvas, "horizontal");
 	}
 
 	/** Arrange every tree top-down, with child branches spread horizontally. */
@@ -102,7 +102,7 @@ export class LayoutEngine {
 		}
 
 		this.applyPositions(canvas, positions, skipAnimationNodeIds);
-		updateAllEdgeSides(canvas);
+		updateAllEdgeSides(canvas, "vertical");
 	}
 
 	/** Layout a subtree below its parent and return its horizontal contour. */
@@ -199,7 +199,7 @@ export class LayoutEngine {
 		}
 
 		this.applyPositions(canvas, positions, skipAnimationNodeIds);
-		updateAllEdgeSides(canvas);
+		updateAllEdgeSides(canvas, "horizontal");
 	}
 
 	/**
@@ -518,7 +518,7 @@ export class LayoutEngine {
 		}
 
 		this.applyPositions(canvas, positions);
-		updateAllEdgeSides(canvas);
+		updateAllEdgeSides(canvas, "horizontal");
 
 		// Resize group to fit all positioned trees (don't rely on updateGroupBounds
 		// which uses center-in-bounds and would miss nodes moved outside original bounds)

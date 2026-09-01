@@ -135,6 +135,10 @@ describe("LayoutEngine.layout", () => {
 		expect(second.y).toBe(90);
 		expect(grandchild.y).toBe(180);
 		expect(first.x).toBeLessThan(second.x);
+		for (const canvasEdge of canvas.edges.values()) {
+			expect(canvasEdge.from.side).toBe("bottom");
+			expect(canvasEdge.to.side).toBe("top");
+		}
 	});
 
 	it("keeps all descendants on their parent branch side", () => {
