@@ -18,6 +18,7 @@ import { registerSubtreeDragHandler } from "./canvas/subtree-drag";
 import { registerDragReparent } from "./canvas/drag-reparent";
 import { registerGroupDragHandler } from "./canvas/group-drag";
 import { registerAutoLayoutOnMove } from "./canvas/auto-layout-on-move";
+import { registerNodeResizeHandler, syncWidthsAtSameDepth } from "./canvas/node-resize";
 import { createMindmapPdf } from "./export/pdf-export";
 import { PdfExportModal } from "./export/pdf-export-modal";
 import { registerBranchCollapse, BranchCollapseHandle } from "./canvas/branch-collapse";
@@ -45,6 +46,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private cleanupDragReparentHandler: (() => void) | null = null;
 	private cleanupGroupDragHandler: (() => void) | null = null;
 	private cleanupAutoLayoutOnMoveHandler: (() => void) | null = null;
+	private cleanupNodeResizeHandler: (() => void) | null = null;
 	private autoResizeHandle: AutoResizeHandle | null = null;
 	private branchCollapseHandle: BranchCollapseHandle | null = null;
 	private interceptedCanvas: Canvas | null = null;
@@ -564,6 +566,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.cleanupAutoLayoutOnMoveHandler();
 			this.cleanupAutoLayoutOnMoveHandler = null;
 		}
+		if (this.cleanupNodeResizeHandler) {
+			this.cleanupNodeResizeHandler();
+			this.cleanupNodeResizeHandler = null;
+		}
 		if (this.cleanupDragReparentHandler) {
 			this.cleanupDragReparentHandler();
 			this.cleanupDragReparentHandler = null;
@@ -661,6 +667,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 		if (this.cleanupAutoLayoutOnMoveHandler) {
 			this.cleanupAutoLayoutOnMoveHandler();
 			this.cleanupAutoLayoutOnMoveHandler = null;
+		}
+		if (this.cleanupNodeResizeHandler) {
+			this.cleanupNodeResizeHandler();
+			this.cleanupNodeResizeHandler = null;
 		}
 		if (this.cleanupDragReparentHandler) {
 			this.cleanupDragReparentHandler();
@@ -793,6 +803,35 @@ export default class CanvasMindMapPlugin extends Plugin {
 				if (parentIds.size > 0) this.layoutEngine.layout(canvas);
 				this.updateGroupBounds(canvas);
 				this.branchCollapseHandle?.refresh();
+			}
+		);
+
+		// Manual width/height changes alter wrapping and all downstream positions.
+		this.cleanupNodeResizeHandler = registerNodeResizeHandler(
+			canvas,
+			() => this.settings.autoLayoutOnEdit
+				&& this.isMindmapCanvas(canvas)
+				&& this.canvasApi.getActiveCanvas() === canvas,
+			({ nodes: resizedNodes, widthChangedNodeIds }) => {
+				const widthChangedNodes = resizedNodes.filter((node) => widthChangedNodeIds.has(node.id));
+				const affectedNodes = new Map(resizedNodes.map((node) => [node.id, node]));
+				for (const node of syncWidthsAtSameDepth(canvas, widthChangedNodes)) {
+					affectedNodes.set(node.id, node);
+				}
+				const skipAnimationNodeIds = new Set(canvas.nodes.keys());
+				this.preserveViewport(canvas, () => {
+					this.layoutEngine.layout(canvas, skipAnimationNodeIds);
+				});
+				this.trackedRaf(canvas.wrapperEl.win, () => {
+					if (this.canvasApi.getActiveCanvas() !== canvas) return;
+					this.preserveViewport(canvas, () => {
+						this.resizeNodes(canvas, Array.from(affectedNodes.values()));
+						this.layoutEngine.layout(canvas, skipAnimationNodeIds);
+					});
+					this.updateGroupBounds(canvas);
+					this.branchCollapseHandle?.refresh();
+					canvas.requestSave();
+				});
 			}
 		);
 
@@ -1241,7 +1280,6 @@ export default class CanvasMindMapPlugin extends Plugin {
 	private resizeNodes(canvas: Canvas, nodes: import("./types/canvas-internal").CanvasNode[]): void {
 		const minH = this.settings.defaultNodeHeight;
 		const maxH = this.settings.maxNodeHeight;
-		const targetW = this.settings.defaultNodeWidth;
 		const BORDER = 2;
 		const SCALE = 1.2;
 		let changed = false;
@@ -1260,8 +1298,8 @@ export default class CanvasMindMapPlugin extends Plugin {
 						if (isHtmlElement(child)) contentH += child.offsetHeight;
 					}
 					targetH = Math.min(Math.max(Math.ceil(contentH * SCALE) + BORDER, minH), maxH);
-					if (targetH !== node.height || targetW !== node.width) {
-						node.moveAndResize({ x: node.x, y: node.y, width: targetW, height: targetH });
+					if (targetH !== node.height) {
+						node.moveAndResize({ x: node.x, y: node.y, width: node.width, height: targetH });
 						changed = true;
 					}
 					continue;
@@ -1271,11 +1309,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			// Preview mode: measure via .markdown-preview-sizer children
 			const sizer = node.contentEl?.querySelector<HTMLElement>(".markdown-preview-sizer");
 			if (!sizer) {
-				// DOM not rendered (off-screen node) — apply width, collect for height retry
-				if (node.width !== targetW) {
-					node.moveAndResize({ x: node.x, y: node.y, width: targetW, height: node.height });
-					changed = true;
-				}
+				// DOM not rendered (off-screen node) — retry after layout.
 				if (node.text) unmeasurable.push(node);
 				continue;
 			}
@@ -1286,20 +1320,16 @@ export default class CanvasMindMapPlugin extends Plugin {
 			}
 
 			// If we measured 0 but the node has text, the DOM isn't rendered yet
-			// (off-screen virtualization). Apply width but skip height change.
+			// (off-screen virtualization). Skip height change until it renders.
 			if (contentH === 0 && node.text) {
-				if (node.width !== targetW) {
-					node.moveAndResize({ x: node.x, y: node.y, width: targetW, height: node.height });
-					changed = true;
-				}
 				unmeasurable.push(node);
 				continue;
 			}
 
 			targetH = Math.min(Math.max(Math.ceil(contentH * SCALE) + BORDER, minH), maxH);
-			if (targetH === node.height && targetW === node.width) continue;
+			if (targetH === node.height) continue;
 
-			node.moveAndResize({ x: node.x, y: node.y, width: targetW, height: targetH });
+			node.moveAndResize({ x: node.x, y: node.y, width: node.width, height: targetH });
 			changed = true;
 		}
 
