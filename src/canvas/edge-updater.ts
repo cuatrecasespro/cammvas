@@ -2,6 +2,14 @@ import type { Canvas, CanvasNode, NodeSide } from "../types/canvas-internal";
 
 export type EdgeOrientation = "horizontal" | "vertical";
 
+// Canvas pointer handlers run after toolbar clicks, so retain the explicitly
+// selected layout instead of inferring a different axis from a single edge.
+const canvasOrientations = new WeakMap<Canvas, EdgeOrientation>();
+
+export function setEdgeOrientation(canvas: Canvas, orientation: EdgeOrientation): void {
+	canvasOrientations.set(canvas, orientation);
+}
+
 interface NodeCenter {
 	cx: number;
 	cy: number;
@@ -50,6 +58,8 @@ export function computeEdgeSides(
  * Only mutates edges whose sides actually changed.
  */
 export function updateAllEdgeSides(canvas: Canvas, orientation?: EdgeOrientation): void {
+	if (orientation) setEdgeOrientation(canvas, orientation);
+	const effectiveOrientation = orientation ?? canvasOrientations.get(canvas);
 	let changed = false;
 
 	for (const edge of canvas.edges.values()) {
@@ -58,7 +68,7 @@ export function updateAllEdgeSides(canvas: Canvas, orientation?: EdgeOrientation
 
 		if (!fromNode || !toNode) continue;
 
-		const { fromSide, toSide } = computeEdgeSides(fromNode, toNode, orientation);
+		const { fromSide, toSide } = computeEdgeSides(fromNode, toNode, effectiveOrientation);
 
 		if (edge.from.side !== fromSide || edge.to.side !== toSide) {
 			edge.from.side = fromSide;

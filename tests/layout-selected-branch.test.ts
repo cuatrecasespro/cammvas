@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Canvas, CanvasEdge, CanvasNode } from "../src/types/canvas-internal";
+import { updateAllEdgeSides } from "../src/canvas/edge-updater";
 import { LayoutEngine } from "../src/mindmap/layout-engine";
 
 function node(id: string, x: number, y: number): CanvasNode {
@@ -135,6 +136,12 @@ describe("LayoutEngine.layout", () => {
 		expect(second.y).toBe(90);
 		expect(grandchild.y).toBe(180);
 		expect(first.x).toBeLessThan(second.x);
+		for (const canvasEdge of canvas.edges.values()) {
+			expect(canvasEdge.from.side).toBe("bottom");
+			expect(canvasEdge.to.side).toBe("top");
+		}
+
+		updateAllEdgeSides(canvas);
 		for (const canvasEdge of canvas.edges.values()) {
 			expect(canvasEdge.from.side).toBe("bottom");
 			expect(canvasEdge.to.side).toBe("top");
