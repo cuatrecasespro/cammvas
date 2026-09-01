@@ -225,7 +225,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				canvas.removeEdge(edge);
 				this.canvasApi.invalidateEdgeIndex();
 
-				if (this.settings.autoLayoutOnEdit) this.layoutEngine.layoutChildren(canvas, parent.id);
+				if (this.settings.autoLayoutOnEdit) this.layoutEngine.layout(canvas);
 				this.updateGroupBounds(canvas);
 				canvas.requestSave();
 			},
@@ -243,7 +243,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 				if (checking) return true;
 				const wasEditing = node.isEditing;
 				this.resizeNodes(canvas, this.collectSubtreeNodes(canvas, node));
-				this.layoutEngine.layoutChildren(canvas, node.id);
+				this.layoutEngine.layout(canvas);
 				this.updateGroupBounds(canvas);
 				if (wasEditing) node.startEditing();
 			},
@@ -785,9 +785,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			this.canvasApi,
 			() => this.settings.autoLayoutOnEdit && this.isMindmapCanvas(canvas),
 			(parentIds) => {
-				for (const parentId of parentIds) {
-					this.layoutEngine.layoutChildren(canvas, parentId);
-				}
+				if (parentIds.size > 0) this.layoutEngine.layout(canvas);
 				this.updateGroupBounds(canvas);
 				this.branchCollapseHandle?.refresh();
 			}
@@ -935,9 +933,11 @@ export default class CanvasMindMapPlugin extends Plugin {
 					if (!treeNode) return;
 					let root = treeNode;
 					while (root.parent) root = root.parent;
-					this.resizeNodes(canvas, this.collectSubtreeNodes(canvas, root.canvasNode));
-					if (this.settings.autoLayoutOnEdit) this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
-					this.updateGroupBounds(canvas);
+					this.preserveViewport(canvas, () => {
+						this.resizeNodes(canvas, this.collectSubtreeNodes(canvas, root.canvasNode));
+						if (this.settings.autoLayoutOnEdit) this.layoutEngine.layout(canvas);
+						this.updateGroupBounds(canvas);
+					});
 				});
 			}
 		);
@@ -948,8 +948,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.waitForPreview(node, () => {
 					// Guard: skip if canvas changed while waiting
 					if (this.canvasApi.getActiveCanvas() !== canvas) return;
-					this.resizeNodes(canvas, [node]);
-					this.finalizeEdit(canvas, node);
+					this.preserveViewport(canvas, () => {
+						this.resizeNodes(canvas, [node]);
+						this.finalizeEdit(canvas, node);
+					});
 				});
 			}
 		};
@@ -1189,6 +1191,23 @@ export default class CanvasMindMapPlugin extends Plugin {
 		}, 500);
 	}
 
+	/** Preserve the current canvas viewport while automatic resize/layout mutates nodes. */
+	private preserveViewport(canvas: Canvas, mutate: () => void): void {
+		const viewport = { x: canvas.x, y: canvas.y, tx: canvas.tx, ty: canvas.ty, zoom: canvas.zoom, tZoom: canvas.tZoom };
+		const restore = () => {
+			canvas.x = viewport.x;
+			canvas.y = viewport.y;
+			canvas.tx = viewport.tx;
+			canvas.ty = viewport.ty;
+			canvas.zoom = viewport.zoom;
+			canvas.tZoom = viewport.tZoom;
+			canvas.requestFrame();
+		};
+		mutate();
+		restore();
+		this.trackedRaf(canvas.wrapperEl.win, restore);
+	}
+
 	/**
 	 * Finalize an edit. By default, preserves manually arranged node positions.
 	 * When autoLayoutOnEdit is enabled, re-arranges the edited node's tree.
@@ -1200,7 +1219,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			if (treeNode) {
 				let root = treeNode;
 				while (root.parent) root = root.parent;
-				this.layoutEngine.layoutChildren(canvas, root.canvasNode.id);
+				this.layoutEngine.layout(canvas);
 			}
 		}
 		this.updateGroupBounds(canvas);
@@ -1319,7 +1338,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 			let root = treeNode;
 			while (root.parent) root = root.parent;
 			if (this.settings.autoLayout) {
-				this.layoutEngine.layoutChildren(canvas, root.canvasNode.id, new Set([newNode.id]));
+				this.layoutEngine.layout(canvas, new Set([newNode.id]));
 			}
 		}
 		if (this.settings.autoColor && this.isMindmapCanvas(canvas)) {

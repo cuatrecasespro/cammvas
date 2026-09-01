@@ -1,5 +1,22 @@
 # Cammvas
 
+## Local maintenance fork
+
+This repository is a separately maintained private fork for the personal Obsidian vault.
+The `cammvas` GitHub repository remains the upstream source; keep it configured as the
+`upstream` remote and merge upstream updates deliberately.
+
+The local branch includes two behavior fixes:
+
+- Automatic Markdown resize/edit-exit and structural changes preserve the current Canvas
+  viewport (`x/y/tx/ty/zoom/tZoom`) across the synchronous and next-frame layout pass.
+- Automatic re-layout after resize, insert, delete, flip, detach, and drag uses the full
+  relationship forest, so all transitively affected nodes are recalculated instead of only
+  the selected node's siblings.
+
+Build and install the generated `main.js`, `manifest.json`, and `styles.css` into the vault's
+`.obsidian/plugins/cammvas/` directory. Do not edit the generated bundle by hand.
+
 **A dedicated mind-mapping experience inside Obsidian Canvas.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![GitHub release](https://img.shields.io/github/v/release/cuatrecasespro/cammvas)](https://github.com/cuatrecasespro/cammvas/releases) [![Obsidian](https://img.shields.io/badge/Obsidian-1.13.4%2B-purple.svg)](https://obsidian.md)
