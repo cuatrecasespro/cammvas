@@ -25,6 +25,13 @@ export class OutlineView extends ItemView {
 	private groupIds: string[] = [];
 	private draggedRoot: TreeNode | null = null;
 	private dragSourceGroupId: string | null = null;
+	/** Clears a pending grip-only drag permission when the pointer is released elsewhere. */
+	private activeDragPermissionReset: (() => void) | null = null;
+	private clearDragPermission = (): void => {
+		this.activeDragPermissionReset?.();
+		this.activeDragPermissionReset = null;
+	};
+	private clearDragPermissionListeners: (() => void) | null = null;
 	private activeNodeId: string | null = null;
 	private allItemEls = new Map<string, HTMLElement>();
 	private groupElMap = new Map<string, HTMLElement>();
@@ -34,6 +41,7 @@ export class OutlineView extends ItemView {
 	private searchContainerEl: HTMLElement | null = null;
 	private searchComponent: SearchComponent | null = null;
 	private nodeDataById = new Map<string, CanvasNodeFileData>();
+	private renderGeneration = 0;
 	zoomPadding = 0;
 	onForestLayout: ((canvas: Canvas, groupId: string) => void) | null = null;
 
@@ -55,6 +63,18 @@ export class OutlineView extends ItemView {
 
 	onOpen(): Promise<void> {
 		this.contentEl.addClass("cammvas-outline");
+		// Pointerup is not guaranteed to bubble from an outline item when the
+		// pointer is released outside the sidebar. Keep the handle-only drag gate
+		// from leaking into the next interaction.
+		const win = this.contentEl.win;
+		win.addEventListener("pointerup", this.clearDragPermission, true);
+		win.addEventListener("pointercancel", this.clearDragPermission, true);
+		win.addEventListener("lostpointercapture", this.clearDragPermission, true);
+		this.clearDragPermissionListeners = () => {
+			win.removeEventListener("pointerup", this.clearDragPermission, true);
+			win.removeEventListener("pointercancel", this.clearDragPermission, true);
+			win.removeEventListener("lostpointercapture", this.clearDragPermission, true);
+		};
 
 		// Create nav-header on containerEl (sibling of view-content, like native Obsidian)
 		const navHeader = this.containerEl.createDiv({ cls: "nav-header" });
@@ -116,6 +136,8 @@ export class OutlineView extends ItemView {
 
 	onClose(): Promise<void> {
 		this.clear();
+		this.clearDragPermissionListeners?.();
+		this.clearDragPermissionListeners = null;
 		if (this.navHeaderEl) {
 			this.navHeaderEl.remove();
 			this.navHeaderEl = null;
@@ -130,6 +152,10 @@ export class OutlineView extends ItemView {
 	 * Rebuild the outline from the current canvas state.
 	 */
 	refresh(canvas: Canvas): void {
+		this.renderGeneration++;
+		this.clearDragPermission();
+		this.draggedRoot = null;
+		this.dragSourceGroupId = null;
 		this.contentEl.empty();
 		this.selectedRoots.clear();
 		this.groupElMap.clear();
@@ -314,12 +340,24 @@ export class OutlineView extends ItemView {
 		// Handle-based drag: only start drag when pointerdown on grip icon
 		if (dragHandle) {
 			let dragAllowed = false;
-			dragHandle.addEventListener("pointerdown", () => { dragAllowed = true; });
-			self.addEventListener("pointerup", () => { dragAllowed = false; });
+			const resetDragAllowed = () => {
+				dragAllowed = false;
+				if (this.activeDragPermissionReset === resetDragAllowed) {
+					this.activeDragPermissionReset = null;
+				}
+			};
+			dragHandle.addEventListener("pointerdown", () => {
+				this.clearDragPermission();
+				dragAllowed = true;
+				this.activeDragPermissionReset = resetDragAllowed;
+			});
+			self.addEventListener("pointerup", resetDragAllowed);
+			self.addEventListener("pointercancel", resetDragAllowed);
+			self.addEventListener("lostpointercapture", resetDragAllowed);
 			self.setAttribute("draggable", "true");
 			self.addEventListener("dragstart", (e) => {
 				if (!dragAllowed) { e.preventDefault(); return; }
-				dragAllowed = false;
+				resetDragAllowed();
 				this.draggedRoot = root;
 				this.dragSourceGroupId = groupId ?? null;
 				self.addClass("is-dragging");
@@ -579,7 +617,15 @@ export class OutlineView extends ItemView {
 			this.app.workspace.setActiveLeaf(this.canvasLeaf, { focus: true });
 		}
 		canvas.selectOnly(group);
-		this.contentEl.win.setTimeout(() => group.startEditing(), 50);
+		this.contentEl.win.setTimeout(() => {
+			if (
+				this.lastCanvas !== canvas
+				|| canvas.nodes.get(group.id) !== group
+				|| !group.nodeEl?.isConnected
+				|| !canvas.selection.has(group)
+			) return;
+			group.startEditing();
+		}, 50);
 
 		this.clearSelection();
 	}
@@ -588,6 +634,7 @@ export class OutlineView extends ItemView {
 	 * Render a group as a collapsible tree-item section.
 	 */
 	private renderGroup(group: GroupInfo, canvas: Canvas): void {
+		const renderGeneration = this.renderGeneration;
 		const isCollapsed = this.collapsedGroups.has(group.node.id);
 
 		const treeItem = this.contentEl.createDiv({
@@ -636,6 +683,11 @@ export class OutlineView extends ItemView {
 			}
 			clickTimer = this.contentEl.win.setTimeout(() => {
 				clickTimer = null;
+				if (
+					this.renderGeneration !== renderGeneration
+					|| this.lastCanvas !== canvas
+					|| !treeItem.isConnected
+				) return;
 				if (this.collapsedGroups.has(group.node.id)) {
 					this.collapsedGroups.delete(group.node.id);
 					treeItem.removeClass("is-collapsed");
@@ -798,6 +850,8 @@ export class OutlineView extends ItemView {
 	 * Clear the outline (no canvas active).
 	 */
 	clear(): void {
+		this.renderGeneration++;
+		this.clearDragPermission();
 		this.canvasLeaf = null;
 		this.lastCanvas = null;
 		this.selectedRoots.clear();

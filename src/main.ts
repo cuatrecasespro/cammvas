@@ -243,9 +243,11 @@ export default class CanvasMindMapPlugin extends Plugin {
 				if (!node) return false;
 				if (checking) return true;
 				const wasEditing = node.isEditing;
-				this.resizeNodes(canvas, this.collectSubtreeNodes(canvas, node));
-				this.layoutEngine.layout(canvas);
-				this.updateGroupBounds(canvas);
+				this.preserveViewport(canvas, () => {
+					this.resizeNodes(canvas, this.collectSubtreeNodes(canvas, node));
+					this.layoutEngine.layout(canvas);
+					this.updateGroupBounds(canvas);
+				});
 				if (wasEditing) node.startEditing();
 			},
 		});
@@ -260,9 +262,11 @@ export default class CanvasMindMapPlugin extends Plugin {
 				if (!this.isMindmapCanvas(canvas)) return false;
 				if (canvas.nodes.size === 0) return false;
 				if (checking) return true;
-				this.resizeNodes(canvas, Array.from(canvas.nodes.values()));
-				this.layoutEngine.layout(canvas);
-				this.updateGroupBounds(canvas);
+				this.preserveViewport(canvas, () => {
+					this.resizeNodes(canvas, Array.from(canvas.nodes.values()));
+					this.layoutEngine.layout(canvas);
+					this.updateGroupBounds(canvas);
+				});
 			},
 		});
 

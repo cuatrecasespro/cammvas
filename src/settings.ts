@@ -38,7 +38,8 @@ export const DEFAULT_SETTINGS: MindMapSettings = {
 	enterCreatesSibling: true,
 	edgeLabelFontSize: 14,
 	horizontalGap: 80,
-	verticalGap: 20,
+	// Keep sibling branches comfortably separated to reduce accidental clicks/drags.
+	verticalGap: 40,
 	defaultNodeWidth: 300,
 	defaultNodeHeight: 60,
 	maxNodeHeight: 300,

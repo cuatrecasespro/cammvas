@@ -54,6 +54,8 @@ export function registerAutoResize(
 	let cachedCmContent: HTMLElement | null = null;
 	let cachedScroller: HTMLElement | null = null;
 	let cachedInputTarget: Document | HTMLElement | null = null;
+	// Invalidates delayed focus/pointer callbacks when editing switches nodes.
+	let watchGeneration = 0;
 	const win = canvas.wrapperEl.win;
 
 	function onContentChange(): void {
@@ -76,6 +78,7 @@ export function registerAutoResize(
 	}
 
 	function startWatching(node: CanvasNode): void {
+		watchGeneration++;
 		const { iframe, scroller, cmContent } = getEditorElements(node);
 
 		activeNode = node;
@@ -115,6 +118,7 @@ export function registerAutoResize(
 
 	function stopWatching(triggerRelayout: boolean = true): void {
 		if (!activeNode) return;
+		watchGeneration++;
 		const node = activeNode;
 
 		// Disconnect observers
@@ -155,8 +159,10 @@ export function registerAutoResize(
 
 	const focusOutHandler = (): void => {
 		if (!activeNode) return;
+		const node = activeNode;
+		const generation = watchGeneration;
 		win.setTimeout(() => {
-			if (activeNode && !activeNode.isEditing) {
+			if (generation === watchGeneration && activeNode === node && !node.isEditing) {
 				stopWatching();
 			}
 		}, 50);
@@ -167,8 +173,10 @@ export function registerAutoResize(
 		if (!activeNode) return;
 		// Ignore clicks inside the editing node
 		if (isDomNode(e.target) && activeNode.nodeEl?.contains(e.target)) return;
+		const node = activeNode;
+		const generation = watchGeneration;
 		win.setTimeout(() => {
-			if (activeNode && !activeNode.isEditing) {
+			if (generation === watchGeneration && activeNode === node && !node.isEditing) {
 				stopWatching();
 			}
 		}, 50);

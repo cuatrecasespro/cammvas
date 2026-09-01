@@ -14,7 +14,7 @@ export type LayoutOrientation = "horizontal" | "vertical";
 
 const DEFAULT_CONFIG: LayoutConfig = {
 	horizontalGap: 80,
-	verticalGap: 20,
+	verticalGap: 40,
 	nodeWidth: 300,
 	nodeHeight: 60,
 	animate: true,
