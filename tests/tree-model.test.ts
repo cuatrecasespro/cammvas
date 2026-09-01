@@ -6,7 +6,7 @@ function node(id: string, x: number, y: number): CanvasNode {
 	return { id, x, y, width: 100, height: 50 } as CanvasNode;
 }
 
-function canvas(nodes: CanvasNode[], pairs: Array<[CanvasNode, CanvasNode]>, groupIds: string[] = []): Canvas {
+function canvas(nodes: CanvasNode[], pairs: Array<[CanvasNode, CanvasNode]>, groupIds: string[] = [], collapsed: string[] = []): Canvas {
 	const edges = pairs.map(([from, to], index) => ({
 		id: `edge-${index}`,
 		from: { node: from, side: "right", end: "none" },
@@ -26,6 +26,7 @@ function canvas(nodes: CanvasNode[], pairs: Array<[CanvasNode, CanvasNode]>, gro
 				height: item.height,
 			})),
 			edges: [],
+			mindmapCollapsed: collapsed,
 		}),
 	} as unknown as Canvas;
 }
@@ -66,6 +67,18 @@ describe("buildForest", () => {
 
 		expect(forest.map((root) => root.canvasNode.id)).toEqual(["large-root", "small-root"]);
 		expect(findTreeForNode(forest, "group")).toBeNull();
+	});
+
+	it("omits collapsed descendants only when requested by the layout", () => {
+		const root = node("root", 0, 0);
+		const branch = node("branch", 200, 0);
+		const hidden = node("hidden", 400, 0);
+		const visible = node("visible", 200, 200);
+		const source = canvas([root, branch, hidden, visible], [[root, branch], [branch, hidden], [root, visible]], [], ["branch"]);
+
+		expect(findTreeForNode(buildForest(source), "hidden")).not.toBeNull();
+		expect(findTreeForNode(buildForest(source, true), "hidden")).toBeNull();
+		expect(buildForest(source, true)[0].children.map((child) => child.canvasNode.id)).toEqual(["visible"]);
 	});
 });
 
