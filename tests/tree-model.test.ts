@@ -78,7 +78,8 @@ describe("buildForest", () => {
 
 		expect(findTreeForNode(buildForest(source), "hidden")).not.toBeNull();
 		expect(findTreeForNode(buildForest(source, true), "hidden")).toBeNull();
-		expect(buildForest(source, true)[0].children.map((child) => child.canvasNode.id)).toEqual(["visible"]);
+		const visibleBranch = findTreeForNode(buildForest(source, true), "branch");
+		expect(visibleBranch?.children).toEqual([]);
 	});
 });
 
