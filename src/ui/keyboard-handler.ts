@@ -130,7 +130,7 @@ export class KeyboardHandler {
 				this.onBeforeLeaveNode?.();
 				const parent = this.nodeOps.deleteAndFocusParent(canvas, node);
 				if (parent) {
-					if (this.autoLayoutOnEditEnabled()) this.layoutEngine.layoutChildren(canvas, parent.id);
+					if (this.autoLayoutOnEditEnabled()) this.layoutEngine.layout(canvas);
 					this.onNodesChanged(canvas);
 					this.canvasApi.selectAndEdit(canvas, parent, this.zoomPadding);
 				}
@@ -155,7 +155,7 @@ export class KeyboardHandler {
 				if (!wasEditing) this.onBeforeLeaveNode?.();
 				const parentNode = this.nodeOps.flipBranch(canvas, node);
 				if (parentNode) {
-					this.layoutEngine.layoutChildren(canvas, parentNode.id);
+					this.layoutEngine.layout(canvas);
 					if (this.autoColorEnabled()) {
 						this.branchColors.applyColors(canvas);
 					}
@@ -216,7 +216,7 @@ export class KeyboardHandler {
 				}
 
 				// Re-layout to clean up positions
-				this.layoutEngine.layoutChildren(canvas, node.id);
+				this.layoutEngine.layout(canvas);
 				if (this.autoColorEnabled()) {
 					this.branchColors.applyColors(canvas);
 				}
@@ -337,7 +337,7 @@ export class KeyboardHandler {
 		if (!newNode) return;
 		if (selectedText) newNode.setText(selectedText);
 		if (this.autoLayoutEnabled()) {
-			this.layoutEngine.layoutChildren(canvas, node.id, new Set([newNode.id]));
+			this.layoutEngine.layout(canvas, new Set([newNode.id]));
 		}
 		if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {
 			this.branchColors.applyColors(canvas);
@@ -360,7 +360,7 @@ export class KeyboardHandler {
 		if (selectedText) newNode.setText(selectedText);
 		const parent = this.canvasApi.getParentNode(canvas, node);
 		if (parent && this.autoLayoutEnabled()) {
-			this.layoutEngine.layoutChildren(canvas, parent.id, new Set([newNode.id]));
+			this.layoutEngine.layout(canvas, new Set([newNode.id]));
 		}
 		if (this.autoColorEnabled() && this.isMindmapEnabled(canvas)) {
 			this.branchColors.applyColors(canvas);

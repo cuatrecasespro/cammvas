@@ -63,8 +63,20 @@ function identifyStrangers(canvas: Canvas, canvasApi: CanvasAPI, group: CanvasNo
  */
 export function registerGroupDragHandler(canvas: Canvas, canvasApi: CanvasAPI): () => void {
 	const frozenNodes: CanvasNode[] = [];
+	const win = canvas.wrapperEl.win;
+
+	const restoreFrozenNodes = (requestSave: boolean): void => {
+		if (frozenNodes.length === 0) return;
+		for (const node of frozenNodes) {
+			delete (node as { moveTo?: unknown }).moveTo;
+		}
+		frozenNodes.length = 0;
+		if (requestSave) canvas.requestSave();
+	};
 
 	const downHandler = (e: PointerEvent): void => {
+		// Recover a previous session whose release occurred outside the canvas.
+		restoreFrozenNodes(false);
 		if (!e.altKey) return;
 
 		const node = findNodeFromEvent(canvas, e);
@@ -82,25 +94,19 @@ export function registerGroupDragHandler(canvas: Canvas, canvasApi: CanvasAPI): 
 	};
 
 	const upHandler = (): void => {
-		if (frozenNodes.length === 0) return;
-		for (const node of frozenNodes) {
-			delete (node as { moveTo?: unknown }).moveTo;
-		}
-		frozenNodes.length = 0;
-		canvas.requestSave();
+		restoreFrozenNodes(true);
 	};
 
 	canvas.wrapperEl?.addEventListener("pointerdown", downHandler, true);
-	canvas.wrapperEl?.addEventListener("pointerup", upHandler);
+	win.addEventListener("pointerup", upHandler, true);
+	win.addEventListener("pointercancel", upHandler, true);
+	win.addEventListener("blur", upHandler);
 
 	return () => {
-		if (frozenNodes.length > 0) {
-			for (const node of frozenNodes) {
-				delete (node as { moveTo?: unknown }).moveTo;
-			}
-			frozenNodes.length = 0;
-		}
+		restoreFrozenNodes(false);
 		canvas.wrapperEl?.removeEventListener("pointerdown", downHandler, true);
-		canvas.wrapperEl?.removeEventListener("pointerup", upHandler);
+		win.removeEventListener("pointerup", upHandler, true);
+		win.removeEventListener("pointercancel", upHandler, true);
+		win.removeEventListener("blur", upHandler);
 	};
 }

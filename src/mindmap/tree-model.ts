@@ -1,4 +1,5 @@
 import type { Canvas, CanvasNode, CanvasNodeFileData } from "../types/canvas-internal";
+import { collectCollapsedDescendantIds } from "../canvas/branch-collapse-state";
 
 export type BranchDirection = "left" | "right";
 
@@ -21,7 +22,7 @@ export interface TreeNode {
  * Each node with no incoming edges becomes a root of its own tree.
  * Returns all roots sorted by descending subtree size (largest first).
  */
-export function buildForest(canvas: Canvas): TreeNode[] {
+export function buildForest(canvas: Canvas, respectCollapsed = false): TreeNode[] {
 	const nodeMap = new Map<string, TreeNode>();
 	const childIds = new Set<string>();
 
@@ -31,10 +32,33 @@ export function buildForest(canvas: Canvas): TreeNode[] {
 	}
 
 	const groupIds = getGroupIds(canvas);
+	const visibleNodeIds = new Set<string>();
+	for (const node of canvas.nodes.values()) {
+		if (!groupIds.has(node.id)) visibleNodeIds.add(node.id);
+	}
+	if (respectCollapsed) {
+		const childrenById = new Map<string, string[]>();
+		for (const edge of canvas.edges.values()) {
+			const children = childrenById.get(edge.from.node.id) ?? [];
+			children.push(edge.to.node.id);
+			childrenById.set(edge.from.node.id, children);
+		}
+		const hidden = collectCollapsedDescendantIds(
+			canvas.getData().mindmapCollapsed ?? [],
+			(id) => childrenById.get(id) ?? []
+		);
+		for (const id of hidden) visibleNodeIds.delete(id);
+	}
+	childIds.clear();
+	for (const edge of canvas.edges.values()) {
+		if (visibleNodeIds.has(edge.from.node.id) && visibleNodeIds.has(edge.to.node.id)) {
+			childIds.add(edge.to.node.id);
+		}
+	}
 
 	// Create TreeNode wrappers (skip group nodes)
 	for (const node of canvas.nodes.values()) {
-		if (groupIds.has(node.id)) continue;
+		if (groupIds.has(node.id) || !visibleNodeIds.has(node.id)) continue;
 		nodeMap.set(node.id, {
 			canvasNode: node,
 			parent: null,
@@ -68,7 +92,7 @@ export function buildForest(canvas: Canvas): TreeNode[] {
 	// Collect all roots: nodes with no incoming edges
 	const roots: TreeNode[] = [];
 	for (const node of canvas.nodes.values()) {
-		if (!childIds.has(node.id)) {
+		if (!childIds.has(node.id) && visibleNodeIds.has(node.id)) {
 			const treeNode = nodeMap.get(node.id);
 			if (treeNode) {
 				setDepths(treeNode, 0);
