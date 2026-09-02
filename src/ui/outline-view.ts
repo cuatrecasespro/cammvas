@@ -34,8 +34,14 @@ export class OutlineView extends ItemView {
 	private searchContainerEl: HTMLElement | null = null;
 	private searchComponent: SearchComponent | null = null;
 	private nodeDataById = new Map<string, CanvasNodeFileData>();
+	private nodeLabelEls = new Map<string, HTMLSpanElement>();
 	zoomPadding = 0;
 	onForestLayout: ((canvas: Canvas, groupId: string) => void) | null = null;
+	onNodeTextChange: ((canvas: Canvas, node: CanvasNode, text: string) => void) | null = null;
+	onAddSibling: ((canvas: Canvas, node: CanvasNode) => CanvasNode | null) | null = null;
+	onAddChild: ((canvas: Canvas, node: CanvasNode) => CanvasNode | null) | null = null;
+	onOutdent: ((canvas: Canvas, node: CanvasNode) => boolean) | null = null;
+	onDeleteEmpty: ((canvas: Canvas, node: CanvasNode) => void) | null = null;
 
 	constructor(leaf: WorkspaceLeaf) {
 		super(leaf);
@@ -134,6 +140,7 @@ export class OutlineView extends ItemView {
 		this.selectedRoots.clear();
 		this.groupElMap.clear();
 		this.allItemEls.clear();
+		this.nodeLabelEls.clear();
 		this.lastCanvas = canvas;
 		this.nodeDataById = new Map(canvas.getData().nodes.map((node) => [node.id, node]));
 
@@ -306,10 +313,7 @@ export class OutlineView extends ItemView {
 			: self.createDiv({ cls: "tree-item-icon cammvas-outline-drag-handle" });
 		if (dragHandle) setIcon(dragHandle, "grip-vertical");
 
-		self.createDiv({
-			cls: "tree-item-inner",
-			text: getNodeTitle(root.canvasNode, this.nodeDataById.get(root.canvasNode.id)),
-		});
+		this.renderNodeLabel(self, root.canvasNode, canvas);
 
 		// Handle-based drag: only start drag when pointerdown on grip icon
 		if (dragHandle) {
@@ -419,10 +423,7 @@ export class OutlineView extends ItemView {
 			});
 		}
 
-		self.createDiv({
-			cls: "tree-item-inner",
-			text: getNodeTitle(node.canvasNode, this.nodeDataById.get(node.canvasNode.id)),
-		});
+		this.renderNodeLabel(self, node.canvasNode, canvas);
 		this.allItemEls.set(node.canvasNode.id, self);
 
 		self.addEventListener("click", () => this.navigateToNode(canvas, node.canvasNode));
@@ -458,6 +459,87 @@ export class OutlineView extends ItemView {
 			this.collapsedNodes.add(nodeId);
 			treeItem.addClass("is-collapsed");
 		}
+	}
+
+	private renderNodeLabel(self: HTMLElement, node: CanvasNode, canvas: Canvas): void {
+		const labelContainer = self.createDiv({ cls: "tree-item-inner" });
+		const label = labelContainer.createSpan({ text: getNodeTitle(node, this.nodeDataById.get(node.id)) });
+		this.nodeLabelEls.set(node.id, label);
+		label.addEventListener("dblclick", (event) => {
+			event.stopPropagation();
+			this.startNodeEdit(label, node, canvas);
+		});
+	}
+
+	private startNodeEdit(label: HTMLSpanElement, node: CanvasNode, canvas: Canvas): void {
+		if (label.contentEditable === "true") return;
+		const originalText = getNodeTitle(node, this.nodeDataById.get(node.id));
+		label.contentEditable = "true";
+		label.focus();
+		const range = label.doc.createRange();
+		range.selectNodeContents(label);
+		const selection = label.win.getSelection();
+		selection?.removeAllRanges();
+		selection?.addRange(range);
+
+		let done = false;
+		const finish = (restore: boolean) => {
+			if (done) return;
+			done = true;
+			const text = (label.textContent ?? "").trim();
+			label.contentEditable = "false";
+			cleanup();
+			if (restore) {
+				label.textContent = originalText;
+				return;
+			}
+			if (text && text !== originalText) this.onNodeTextChange?.(canvas, node, text);
+		};
+		const focusNode = (nodeId: string) => {
+			this.contentEl.win.setTimeout(() => {
+				const nextLabel = this.nodeLabelEls.get(nodeId);
+				const nextNode = canvas.nodes.get(nodeId);
+				if (nextLabel && nextNode) this.startNodeEdit(nextLabel, nextNode, canvas);
+			}, 0);
+		};
+		const onKeydown = (event: KeyboardEvent) => {
+			event.stopPropagation();
+			if (event.key === "Escape") {
+				event.preventDefault();
+				finish(true);
+				return;
+			}
+			if (event.key === "Backspace" && !(label.textContent ?? "").trim()) {
+				event.preventDefault();
+				finish(false);
+				this.onDeleteEmpty?.(canvas, node);
+				return;
+			}
+			if (event.key === "Enter") {
+				event.preventDefault();
+				finish(false);
+				const sibling = this.onAddSibling?.(canvas, node);
+				if (sibling) focusNode(sibling.id);
+				return;
+			}
+			if (event.key === "Tab") {
+				event.preventDefault();
+				finish(false);
+				if (event.shiftKey) {
+					if (this.onOutdent?.(canvas, node)) focusNode(node.id);
+				} else {
+					const child = this.onAddChild?.(canvas, node);
+					if (child) focusNode(child.id);
+				}
+			}
+		};
+		const onBlur = () => finish(false);
+		const cleanup = () => {
+			label.removeEventListener("keydown", onKeydown);
+			label.removeEventListener("blur", onBlur);
+		};
+		label.addEventListener("keydown", onKeydown);
+		label.addEventListener("blur", onBlur);
 	}
 
 	private navigateToNode(canvas: Canvas, node: CanvasNode): void {
@@ -804,6 +886,7 @@ export class OutlineView extends ItemView {
 		this.groupElMap.clear();
 		this.allItemEls.clear();
 		this.nodeDataById.clear();
+		this.nodeLabelEls.clear();
 		this.collapsedGroups.clear();
 		this.collapsedNodes.clear();
 		this.activeNodeId = null;

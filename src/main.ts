@@ -20,6 +20,8 @@ import { registerGroupDragHandler } from "./canvas/group-drag";
 import { registerAutoLayoutOnMove } from "./canvas/auto-layout-on-move";
 import { createMindmapPdf } from "./export/pdf-export";
 import { PdfExportModal } from "./export/pdf-export-modal";
+import { createCanvasZip } from "./export/canvas-zip-export";
+import { CanvasZipExportModal } from "./export/canvas-zip-export-modal";
 import { registerBranchCollapse, BranchCollapseHandle } from "./canvas/branch-collapse";
 import { registerAutoResize, AutoResizeHandle, getEditorElements } from "./ui/auto-resize";
 import { OutlineView, OUTLINE_VIEW_TYPE } from "./ui/outline-view";
@@ -341,12 +343,10 @@ export default class CanvasMindMapPlugin extends Plugin {
 					.setIcon("circle-plus")
 					.onClick(() => this.createRootNode()));
 				menu.addItem((item) => item
-					.setTitle("Export as high-quality PDF")
+					.setTitle("Export")
 					.setIcon("file-down")
 					.setDisabled(canvas.nodes.size === 0)
-					.onClick(() => {
-						void this.exportMindmapPdf(canvas);
-					}));
+					.onClick((event) => this.showExportMenu(event, canvas)));
 			})
 		);
 
@@ -417,11 +417,9 @@ export default class CanvasMindMapPlugin extends Plugin {
 				}
 				if (this.isMindmapCanvas(canvas)) {
 					menu.addItem((item) => item
-						.setTitle("Export as high-quality PDF")
+						.setTitle("Export")
 						.setIcon("file-down")
-						.onClick(() => {
-							void this.exportMindmapPdf(canvas);
-						}));
+						.onClick((event) => this.showExportMenu(event, canvas)));
 				}
 			})
 		);
@@ -1066,6 +1064,14 @@ export default class CanvasMindMapPlugin extends Plugin {
 					this.layoutEngine.layoutForest(c, groupId);
 					this.updateGroupBounds(c);
 				};
+				view.onNodeTextChange = (c, node, text) => {
+					node.setText(text);
+					c.requestSave();
+				};
+				view.onAddSibling = (c, node) => this.addOutlineSibling(c, node);
+				view.onAddChild = (c, node) => this.addOutlineChild(c, node);
+				view.onOutdent = (c, node) => this.outdentOutlineNode(c, node);
+				view.onDeleteEmpty = (c, node) => this.deleteOutlineNode(c, node);
 				view.refresh(canvas);
 			}
 		}
@@ -1533,7 +1539,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		exportPdfBtn.addClass('cammvas-toggle-btn', 'cammvas-export-pdf-btn', 'clickable-icon');
 		this.registerDomEvent(exportPdfBtn, 'click', (event) => {
 			event.stopPropagation();
-			void this.exportMindmapPdf(canvas);
+			this.showExportMenu(event, canvas);
 		});
 		const layoutBtn = controls.createEl("button", { attr: { type: "button" } });
 		layoutBtn.addClass("cammvas-toggle-btn", "cammvas-layout-btn", "clickable-icon");
@@ -1615,18 +1621,56 @@ export default class CanvasMindMapPlugin extends Plugin {
 				this.updateGroupBounds(canvas);
 			}));
 		menu.addItem((item) => item
-			.setTitle("Export as high-quality PDF")
+			.setTitle("Export")
 			.setIcon("file-down")
 			.setDisabled(!isMindmap || canvas.nodes.size === 0)
-			.onClick(() => {
-				void this.exportMindmapPdf(canvas);
-			}));
+			.onClick((event) => this.showExportMenu(event, canvas)));
 		menu.addItem((item) => item
 			.setTitle("Open map outline")
 			.setIcon("list-tree")
 			.onClick(() => this.showOutline(canvas, true)));
 		const rect = anchor.getBoundingClientRect();
 		menu.showAtPosition({ x: rect.left, y: rect.bottom });
+	}
+
+	private addOutlineSibling(canvas: Canvas, node: CanvasNode): CanvasNode | null {
+		const sibling = this.nodeOps.addSibling(canvas, node);
+		if (!sibling) return null;
+		const parent = this.canvasApi.getParentNode(canvas, node);
+		if (parent) this.layoutEngine.layoutChildren(canvas, parent.id, new Set([sibling.id]));
+		this.finishOutlineMutation(canvas);
+		return sibling;
+	}
+
+	private addOutlineChild(canvas: Canvas, node: CanvasNode): CanvasNode | null {
+		const child = this.nodeOps.addChild(canvas, node);
+		if (!child) return null;
+		this.layoutEngine.layoutChildren(canvas, node.id, new Set([child.id]));
+		this.finishOutlineMutation(canvas);
+		return child;
+	}
+
+	private outdentOutlineNode(canvas: Canvas, node: CanvasNode): boolean {
+		const parent = this.canvasApi.getParentNode(canvas, node);
+		const grandparent = parent && this.canvasApi.getParentNode(canvas, parent);
+		if (!parent || !grandparent || !this.nodeOps.reparent(canvas, node, grandparent)) return false;
+		this.layoutEngine.layoutChildren(canvas, parent.id);
+		this.layoutEngine.layoutChildren(canvas, grandparent.id);
+		this.finishOutlineMutation(canvas);
+		return true;
+	}
+
+	private deleteOutlineNode(canvas: Canvas, node: CanvasNode): void {
+		const parent = this.nodeOps.deleteAndFocusParent(canvas, node);
+		if (parent) this.layoutEngine.layoutChildren(canvas, parent.id);
+		this.finishOutlineMutation(canvas);
+	}
+
+	private finishOutlineMutation(canvas: Canvas): void {
+		if (this.settings.autoColor) this.branchColors.applyColors(canvas);
+		this.updateGroupBounds(canvas);
+		canvas.requestSave();
+		this.refreshOutline(canvas);
 	}
 
 	private showBranchColorMenu(
@@ -1766,6 +1810,48 @@ export default class CanvasMindMapPlugin extends Plugin {
 		);
 	}
 
+	private showExportMenu(event: MouseEvent | KeyboardEvent, canvas: Canvas): void {
+		const menu = new Menu();
+		menu.addItem((item) => item
+			.setTitle("High-quality PDF")
+			.setIcon("file-text")
+			.onClick(() => this.exportMindmapPdf(canvas)));
+		menu.addItem((item) => item
+			.setTitle("Portable canvas zip")
+			.setIcon("package")
+			.onClick(() => this.exportCanvasZip(canvas)));
+		menu.showAtMouseEvent(event as MouseEvent);
+	}
+
+	private exportCanvasZip(canvas: Canvas): void {
+		const fileName = canvas.view.file.path.split("/").pop()?.replace(/\.canvas$/i, "") || "mindmap";
+		new CanvasZipExportModal(this.app, fileName, (name, folder) => {
+			void this.saveCanvasZip(canvas, name, folder);
+		}).open();
+	}
+
+	private async saveCanvasZip(canvas: Canvas, fileName: string, outputFolder: string): Promise<void> {
+		const safeName = fileName.replace(/\.zip$/i, "").replace(/[\\/:*?"<>|]/g, "-") || "mindmap";
+		try {
+			const result = await createCanvasZip(canvas.view.file.path, canvas.getData(), async (path) => {
+				const file = this.app.vault.getAbstractFileByPath(path);
+				return file instanceof TFile ? new Uint8Array(await this.app.vault.readBinary(file)) : null;
+			});
+			const folder = await this.ensureExportFolder(outputFolder);
+			let outputPath = `${folder ? `${folder}/` : ""}${safeName}.zip`;
+			let index = 2;
+			while (this.app.vault.getAbstractFileByPath(outputPath)) {
+				outputPath = `${folder ? `${folder}/` : ""}${safeName} ${index++}.zip`;
+			}
+			await this.app.vault.createBinary(outputPath, result.archive);
+			const missing = result.missingPaths.length ? ` ${result.missingPaths.length} missing attachment(s) skipped.` : "";
+			new Notice(`Canvas ZIP exported to ${outputPath}.${missing}`);
+		} catch (error) {
+			console.error("Cammvas Canvas ZIP export failed", error);
+			new Notice("Unable to export the canvas zip. Check the developer console for details.");
+		}
+	}
+
 	private updateLayoutButton(canvas = this.canvasApi.getActiveCanvas()): void {
 		if (!this.layoutBtnEl) return;
 		const enabled = !!canvas && this.isMindmapCanvas(canvas) && canvas.nodes.size > 0;
@@ -1788,7 +1874,7 @@ export default class CanvasMindMapPlugin extends Plugin {
 		this.exportPdfBtnEl.setAttribute("aria-disabled", String(!enabled));
 		this.exportPdfBtnEl.setAttribute(
 			"aria-label",
-			enabled ? "Export as high-quality PDF" : "Export PDF (requires a non-empty mindmap)"
+			enabled ? "Export mindmap" : "Export mindmap (requires a non-empty mindmap)"
 		);
 	}
 
